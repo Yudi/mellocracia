@@ -1,0 +1,174 @@
+name: mellocracia
+
+x-logging: &default-logging
+  driver: 'json-file'
+  options:
+    max-size: '500k'
+
+services:
+  web:
+    image: ghcr.io/yudi/mellocracia-web:latest
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-/api}
+        PUBLIC_TURNSTILE_SITE_KEY: ${PUBLIC_TURNSTILE_SITE_KEY:-}
+    networks:
+      - traefik
+      - default
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: '4321'
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-https://mellocracia.yudi.me}
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-https://mellocracia.yudi.me/api}
+      PUBLIC_TURNSTILE_SITE_KEY: ${PUBLIC_TURNSTILE_SITE_KEY:-}
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.scope=public'
+      - 'traefik.docker.network=traefik'
+      - 'traefik.http.routers.mellocracia-web.rule=Host(`mellocracia.yudi.me`)'
+      - 'traefik.http.routers.mellocracia-web.priority=10'
+      - 'traefik.http.services.mellocracia-web-svc.loadbalancer.server.port=4321'
+      - 'traefik.http.routers.mellocracia-web.entrypoints=web, websecure'
+      - 'traefik.http.routers.mellocracia-web.service=mellocracia-web-svc'
+      - 'traefik.http.routers.mellocracia-web.tls=true'
+      - 'traefik.http.routers.mellocracia-web.tls.certResolver=letsencrypt'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'node -e "fetch(''http://127.0.0.1:4321/'').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"'
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    logging: *default-logging
+    restart: unless-stopped
+
+  api:
+    image: ghcr.io/yudi/mellocracia-api:latest
+    build:
+      context: ..
+      dockerfile: apps/backend/Dockerfile
+    networks:
+      - backend
+      - traefik
+      - default
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in .env}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.scope=public'
+      - 'traefik.docker.network=traefik'
+      - 'traefik.http.routers.mellocracia-api.rule=Host(`mellocracia.yudi.me`) && PathPrefix(`/api`)'
+      - 'traefik.http.routers.mellocracia-api.priority=20'
+      - 'traefik.http.services.mellocracia-api-svc.loadbalancer.server.port=3000'
+      - 'traefik.http.routers.mellocracia-api.entrypoints=web, websecure'
+      - 'traefik.http.routers.mellocracia-api.service=mellocracia-api-svc'
+      - 'traefik.http.routers.mellocracia-api.tls=true'
+      - 'traefik.http.routers.mellocracia-api.tls.certResolver=letsencrypt'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - '3000'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'node -e "fetch(''http://127.0.0.1:3000/api/health/ready'').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"'
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    logging: *default-logging
+    restart: unless-stopped
+
+  migrate:
+    image: ghcr.io/yudi/mellocracia-api:latest
+    build:
+      context: ..
+      dockerfile: apps/backend/Dockerfile
+    command: ['node', 'main.js', '--migrate']
+    networks:
+      - backend
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in .env}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: 'no'
+    logging: *default-logging
+
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mellocracia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-mellocracia}
+    volumes:
+      - ${DATA_ROOT:-/home/shared/docker-data/mellocracia}/postgres:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" -h localhost || exit 1'
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    logging: *default-logging
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    command:
+      [
+        'redis-server',
+        '--appendonly',
+        'yes',
+        '--maxmemory',
+        '256mb',
+        '--maxmemory-policy',
+        'allkeys-lru',
+      ]
+    expose:
+      - '6379'
+    volumes:
+      - ${DATA_ROOT:-/home/shared/docker-data/mellocracia}/redis:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 5
+    logging: *default-logging
+    restart: unless-stopped
+
+networks:
+  default:
+  backend:
+    internal: true
+  traefik:
+    external: true

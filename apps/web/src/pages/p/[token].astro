@@ -1,0 +1,21 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import VotePoll from '../../components/VotePoll.svelte';
+
+export const prerender = false;
+
+const { token } = Astro.params;
+if (!token) {
+  return Astro.redirect('/');
+}
+---
+
+<BaseLayout
+  title="Vote na próxima jogatina"
+  description="Compare os jogos escolhidos pela mesa e registre seu voto."
+  canonicalPath="/"
+  socialImagePath="/og/mellocracia-vote.png"
+  socialImageAlt="Mellocracia: hora de votar na próxima jogatina."
+>
+  <VotePoll client:load token={token} />
+</BaseLayout>

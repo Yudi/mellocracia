@@ -1,21 +1,14 @@
 ---
-import Welcome from '../components/Welcome.svelte';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Creator from '../components/Creator.svelte';
+
+export const prerender = false;
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Mello Games</title>
-	</head>
-	<body>
-		<main>
-			<h1>Mello Games</h1>
-			<p>Astro renders this page; the button below is a hydrated Svelte island.</p>
-			<Welcome client:load />
-		</main>
-	</body>
-</html>
+<BaseLayout
+  title="Crie a votação da próxima jogatina"
+  description="Escolha jogos do catálogo Mello Games, compartilhe a votação e acompanhe a escolha da mesa."
+  canonicalPath="/"
+>
+  <Creator client:load />
+</BaseLayout>

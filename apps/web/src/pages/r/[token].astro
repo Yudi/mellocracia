@@ -1,0 +1,21 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ResultsView from '../../components/ResultsView.svelte';
+
+export const prerender = false;
+
+const { token } = Astro.params;
+if (!token) {
+  return Astro.redirect('/');
+}
+---
+
+<BaseLayout
+  title="Resultados da mesa"
+  description="Acompanhe a contagem da votação e veja quais jogos foram escolhidos pela mesa."
+  canonicalPath="/"
+  socialImagePath="/og/mellocracia-results.png"
+  socialImageAlt="Mellocracia: veja o placar da votação da mesa."
+>
+  <ResultsView client:load token={token} />
+</BaseLayout>
