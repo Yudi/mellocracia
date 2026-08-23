@@ -33,6 +33,7 @@ const CATALOG_CURRENT_KEY = 'mellocracia:catalog:current:v1';
 const CATALOG_STALE_KEY = 'mellocracia:catalog:stale:v1';
 const CATALOG_STALE_TTL_SECONDS = 24 * 60 * 60;
 const GHOST_PAGE_SIZE = 100;
+const GHOST_FETCH_MAX_TIMEOUT_MS = 60_000;
 
 @Injectable()
 export class CatalogService {
@@ -123,7 +124,7 @@ export class CatalogService {
       page += 1
     ) {
       const url = this.buildGhostPostsUrl(page, fields);
-      const response = await this.fetchWithTimeout(url);
+      const response = await this.fetchWithRetry(url);
       if (!response.ok) {
         throw new Error(`Ghost API returned HTTP ${response.status}`);
       }
@@ -167,12 +168,53 @@ export class CatalogService {
     return url.toString();
   }
 
-  private async fetchWithTimeout(url: string): Promise<Response> {
+  private async fetchWithRetry(url: string): Promise<Response> {
+    let lastError: unknown;
+
+    for (
+      let attempt = 1;
+      attempt <= this.config.ghostFetchAttempts;
+      attempt += 1
+    ) {
+      try {
+        const response = await this.fetchWithTimeout(
+          url,
+          this.ghostFetchTimeoutForAttempt(attempt),
+        );
+        if (
+          response.ok ||
+          !this.isRetryableGhostStatus(response.status) ||
+          attempt === this.config.ghostFetchAttempts
+        ) {
+          return response;
+        }
+
+        this.logger.warn(
+          `Ghost catalog request returned HTTP ${response.status}; retrying ` +
+            `(${attempt}/${this.config.ghostFetchAttempts})`,
+        );
+      } catch (error) {
+        lastError = error;
+        if (attempt === this.config.ghostFetchAttempts) {
+          throw error;
+        }
+
+        this.logger.warn(
+          `Ghost catalog request failed: ${this.errorMessage(error)}; retrying ` +
+            `(${attempt}/${this.config.ghostFetchAttempts})`,
+        );
+      }
+    }
+
+    throw lastError ?? new Error('Ghost catalog request failed');
+  }
+
+  private async fetchWithTimeout(
+    url: string,
+    timeoutMs: number,
+  ): Promise<Response> {
     const controller = new AbortController();
-    const timeout = setTimeout(
-      () => controller.abort(),
-      this.config.ghostFetchTimeoutMs,
-    );
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       return await fetch(url, {
         signal: controller.signal,
@@ -184,6 +226,17 @@ export class CatalogService {
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  private isRetryableGhostStatus(status: number): boolean {
+    return status === 408 || status === 425 || status === 429 || status >= 500;
+  }
+
+  private ghostFetchTimeoutForAttempt(attempt: number): number {
+    return Math.min(
+      this.config.ghostFetchTimeoutMs * 2 ** (attempt - 1),
+      GHOST_FETCH_MAX_TIMEOUT_MS,
+    );
   }
 
   private normalizePost(value: unknown): CatalogItem | undefined {

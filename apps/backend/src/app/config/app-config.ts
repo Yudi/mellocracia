@@ -77,7 +77,13 @@ export class AppConfig {
     process.env.GHOST_FETCH_TIMEOUT_MS,
     10_000,
     1_000,
-    30_000,
+    60_000,
+  );
+  readonly ghostFetchAttempts = parseInteger(
+    process.env.GHOST_FETCH_ATTEMPTS,
+    3,
+    1,
+    5,
   );
   readonly ghostMaxPosts = parseInteger(
     process.env.GHOST_MAX_POSTS,
