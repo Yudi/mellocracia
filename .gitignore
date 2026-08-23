@@ -44,9 +44,10 @@ Thumbs.db
 .claude/worktrees
 .claude/settings.local.json
 
-# Durable Impeccable product/design records override the user's global ignore.
-!PRODUCT.md
-!.impeccable/
-!.impeccable/**
-!apps/web/.impeccable/
-!apps/web/.impeccable/**
+# Impeccable
+DESIGN.md
+PRODUCT.md
+.impeccable/
+.impeccable/**
+apps/web/.impeccable/
+apps/web/.impeccable/**
