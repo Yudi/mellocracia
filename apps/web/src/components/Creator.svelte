@@ -1,6 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { CatalogItem, CatalogResponse, CreatePollResponse } from '@mellocracia/contracts';
+  import type {
+    CatalogItem,
+    CatalogResponse,
+    CreatePollResponse,
+  } from '@mellocracia/contracts';
   import { POLL_LIMITS } from '@mellocracia/contracts';
   import Icon from './Icon.svelte';
   import TallyMark from './TallyMark.svelte';
@@ -30,17 +34,27 @@
   $: filteredItems = items.filter((item) => {
     const normalizedQuery = query.trim().toLocaleLowerCase('pt-BR');
     if (!normalizedQuery) return true;
-    return `${item.title} ${item.excerpt}`.toLocaleLowerCase('pt-BR').includes(normalizedQuery);
+    return `${item.title} ${item.excerpt}`
+      .toLocaleLowerCase('pt-BR')
+      .includes(normalizedQuery);
   });
 
   $: selectedItems = items.filter((item) => selectedIds.includes(item.id));
-  $: canCreate = selectedItems.length >= POLL_LIMITS.minOptions && title.trim().length > 0 && !creating;
-  $: allVisibleSelected = filteredItems.length > 0 && filteredItems.every((item) => selectedIds.includes(item.id));
+  $: canCreate =
+    selectedItems.length >= POLL_LIMITS.minOptions &&
+    title.trim().length > 0 &&
+    !creating;
+  $: allVisibleSelected =
+    filteredItems.length > 0 &&
+    filteredItems.every((item) => selectedIds.includes(item.id));
 
   let selectedIds: string[] = [];
 
   function formatDate(value: string): string {
-    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+    return new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }).format(new Date(value));
   }
 
   onMount(() => {
@@ -56,7 +70,10 @@
       items = response.items;
       catalogStale = response.stale;
     } catch (error) {
-      errorMessage = describeApiError(error, 'O catálogo não pôde ser carregado agora.');
+      errorMessage = describeApiError(
+        error,
+        'O catálogo não pôde ser carregado agora.',
+      );
     } finally {
       loading = false;
     }
@@ -111,11 +128,15 @@
       });
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
-      createError = describeApiError(error, 'Não foi possível criar a votação.');
+      createError = describeApiError(
+        error,
+        'Não foi possível criar a votação.',
+      );
       turnstileResetKey += 1;
       turnstileToken = undefined;
       if (isRateLimitError(error)) {
-        createError += ' A criação tem um limite por endereço para proteger o serviço.';
+        createError +=
+          ' A criação tem um limite por endereço para proteger o serviço.';
       }
     } finally {
       creating = false;
@@ -135,7 +156,8 @@
         if (copiedTarget === target) copiedTarget = null;
       }, 2200);
     } catch {
-      copyError = 'Não foi possível copiar automaticamente. Selecione o link para copiar manualmente.';
+      copyError =
+        'Não foi possível copiar automaticamente. Selecione o link para copiar manualmente.';
     }
   }
 
@@ -154,10 +176,17 @@
 {#if createdPoll}
   <section class="success-panel" aria-labelledby="success-title">
     <div class="success-heading">
-      <span class="success-stamp" aria-hidden="true"><Icon name="check" size={27} strokeWidth={2.5} /></span>
+      <span class="success-stamp" aria-hidden="true"
+        ><Icon name="check" size={27} strokeWidth={2.5} /></span
+      >
       <div>
-        <h1 id="success-title" class="display-title">Agora é só <strong>compartilhar.</strong></h1>
-        <p class="page-intro-copy">Os links expiram em {formatDate(createdPoll.expiresAt)}. Guarde o link de resultados separado do link de votação.</p>
+        <h1 id="success-title" class="display-title">
+          Agora é só <strong>compartilhar.</strong>
+        </h1>
+        <p class="page-intro-copy">
+          Os links expiram em {formatDate(createdPoll.expiresAt)}. Guarde o link
+          de resultados separado do link de votação.
+        </p>
       </div>
     </div>
 
@@ -165,86 +194,197 @@
       <div class="share-row">
         <div>
           <span class="share-label">Link para votar</span>
-          <a href={createdPoll.voteUrl} target="_blank" rel="noreferrer">{absoluteUrl(createdPoll.voteUrl)}</a>
+          <a href={createdPoll.voteUrl} target="_blank" rel="noreferrer"
+            >{absoluteUrl(createdPoll.voteUrl)}</a
+          >
         </div>
         <div class="share-actions">
-          <a class="button small" href={createdPoll.voteUrl} target="_blank" rel="noreferrer">Abrir <Icon name="external" size={16} /></a>
-          <button class="button small primary" type="button" onclick={() => copyLink('vote', createdPoll?.voteUrl ?? '')}>
-            <Icon name="copy" size={16} /> {copiedTarget === 'vote' ? 'Copiado' : 'Copiar'}
+          <a
+            class="button small"
+            href={createdPoll.voteUrl}
+            target="_blank"
+            rel="noreferrer">Abrir <Icon name="external" size={16} /></a
+          >
+          <button
+            class="button small primary"
+            type="button"
+            onclick={() => copyLink('vote', createdPoll?.voteUrl ?? '')}
+          >
+            <Icon name="copy" size={16} />
+            {copiedTarget === 'vote' ? 'Copiado' : 'Copiar'}
           </button>
         </div>
       </div>
       <div class="share-row">
         <div>
           <span class="share-label">Link secreto de resultados</span>
-          <a href={createdPoll.resultsUrl} target="_blank" rel="noreferrer">{absoluteUrl(createdPoll.resultsUrl)}</a>
+          <a href={createdPoll.resultsUrl} target="_blank" rel="noreferrer"
+            >{absoluteUrl(createdPoll.resultsUrl)}</a
+          >
         </div>
         <div class="share-actions">
-          <a class="button small" href={createdPoll.resultsUrl} target="_blank" rel="noreferrer">Ver resultados <Icon name="external" size={16} /></a>
-          <button class="button small primary" type="button" onclick={() => copyLink('results', createdPoll?.resultsUrl ?? '')}>
-            <Icon name="copy" size={16} /> {copiedTarget === 'results' ? 'Copiado' : 'Copiar'}
+          <a
+            class="button small"
+            href={createdPoll.resultsUrl}
+            target="_blank"
+            rel="noreferrer"
+            >Ver resultados <Icon name="external" size={16} /></a
+          >
+          <button
+            class="button small primary"
+            type="button"
+            onclick={() => copyLink('results', createdPoll?.resultsUrl ?? '')}
+          >
+            <Icon name="copy" size={16} />
+            {copiedTarget === 'results' ? 'Copiado' : 'Copiar'}
           </button>
         </div>
       </div>
     </div>
 
     {#if copyError}
-      <p class="notice error" role="alert"><Icon name="x" size={18} /> {copyError}</p>
+      <p class="notice error" role="alert">
+        <Icon name="x" size={18} />
+        {copyError}
+      </p>
     {/if}
     <div class="success-footer">
-      <span>{createdPoll.optionCount} opções incluídas · expira em {formatDate(createdPoll.expiresAt)}</span>
-      <button class="button cobalt" type="button" onclick={newPoll}>Montar outra votação <Icon name="arrow-right" size={18} /></button>
+      <span
+        >{createdPoll.optionCount} opções incluídas · expira em {formatDate(
+          createdPoll.expiresAt,
+        )}</span
+      >
+      <button class="button cobalt" type="button" onclick={newPoll}
+        >Montar outra votação <Icon name="arrow-right" size={18} /></button
+      >
     </div>
   </section>
 {:else}
   <section class="page-intro creator-intro" aria-labelledby="creator-title">
     <div>
-      <h1 id="creator-title" class="display-title">Monte a cédula da <strong>próxima jogatina.</strong></h1>
-      <p class="page-intro-copy">Escolha os jogos, dê um nome para a votação e mande o link para a mesa.</p>
+      <h1 id="creator-title" class="display-title">
+        Monte a cédula dos <strong>próximos jogos.</strong>
+      </h1>
+      <p class="page-intro-copy">
+        Escolha os jogos, dê um nome para a votação e mande o link para a mesa.
+      </p>
     </div>
-    <a class="source-link" href="https://mello.yudi.com.br/" target="_blank" rel="noreferrer">Conheça o Mello Games <Icon name="external" size={16} /></a>
+    <a
+      class="source-link"
+      href="https://mello.yudi.com.br/"
+      target="_blank"
+      rel="noreferrer"
+      >Conheça o Mello Games <Icon name="external" size={16} /></a
+    >
   </section>
 
   {#if errorMessage}
     <div class="notice error" role="alert">
       <Icon name="x" size={18} />
-      <div><strong>Catálogo indisponível</strong>{errorMessage} <button class="plain-link" type="button" onclick={loadCatalog}>Tentar novamente</button></div>
+      <div>
+        <strong>Catálogo indisponível</strong>{errorMessage}
+        <button class="plain-link" type="button" onclick={loadCatalog}
+          >Tentar novamente</button
+        >
+      </div>
     </div>
   {:else if loading}
-    <div class="loading-state" aria-live="polite"><div><div class="loading-mark" aria-hidden="true"></div><p>Buscando os jogos do Mello Games…</p></div></div>
+    <div class="loading-state" aria-live="polite">
+      <div>
+        <div class="loading-mark" aria-hidden="true"></div>
+        <p>Buscando os jogos do Mello Games…</p>
+      </div>
+    </div>
   {:else if items.length === 0}
-    <div class="empty-state"><div><p>Nenhum jogo apareceu no catálogo agora. Tente recarregar em alguns instantes.</p><button class="button cobalt" type="button" onclick={loadCatalog}>Recarregar catálogo</button></div></div>
+    <div class="empty-state">
+      <div>
+        <p>
+          Nenhum jogo apareceu no catálogo agora. Tente recarregar em alguns
+          instantes.
+        </p>
+        <button class="button cobalt" type="button" onclick={loadCatalog}
+          >Recarregar catálogo</button
+        >
+      </div>
+    </div>
   {:else}
     <section class="catalog-section" aria-labelledby="catalog-title">
       <div class="catalog-toolbar">
         <div>
           <p class="section-label" id="catalog-title">Escolha os jogos</p>
-          <p class="catalog-count"><strong>{items.length}</strong> {items.length === 1 ? 'jogo no catálogo' : 'jogos no catálogo'}{query ? ` · ${filteredItems.length} visíveis` : ''}</p>
+          <p class="catalog-count">
+            <strong>{items.length}</strong>
+            {items.length === 1
+              ? 'jogo no catálogo'
+              : 'jogos no catálogo'}{query
+              ? ` · ${filteredItems.length} visíveis`
+              : ''}
+          </p>
         </div>
         <div class="catalog-actions">
           <label class="search-field">
             <span class="visually-hidden">Buscar jogo por nome</span>
             <Icon name="search" size={21} />
-            <input type="search" value={query} oninput={updateQuery} placeholder="Buscar jogo por nome…" autocomplete="off" />
+            <input
+              type="search"
+              value={query}
+              oninput={updateQuery}
+              placeholder="Buscar jogo por nome…"
+              autocomplete="off"
+            />
           </label>
-          <button class="select-all" type="button" onclick={toggleVisibleItems} aria-pressed={allVisibleSelected}>
-            <span class:checked={allVisibleSelected} class="checkbox-mark" aria-hidden="true">{#if allVisibleSelected}<Icon name="check" size={18} strokeWidth={2.8} />{/if}</span>
+          <button
+            class="select-all"
+            type="button"
+            onclick={toggleVisibleItems}
+            aria-pressed={allVisibleSelected}
+          >
+            <span
+              class:checked={allVisibleSelected}
+              class="checkbox-mark"
+              aria-hidden="true"
+              >{#if allVisibleSelected}<Icon
+                  name="check"
+                  size={18}
+                  strokeWidth={2.8}
+                />{/if}</span
+            >
             {allVisibleSelected ? 'Limpar visíveis' : 'Selecionar visíveis'}
           </button>
         </div>
       </div>
 
       {#if catalogStale}
-        <p class="catalog-stale" role="status">Mostrando uma cópia recente do catálogo enquanto atualizamos a fonte.</p>
+        <p class="catalog-stale" role="status">
+          Mostrando uma cópia recente do catálogo enquanto atualizamos a fonte.
+        </p>
       {/if}
 
       {#if filteredItems.length === 0}
-        <div class="empty-state catalog-empty"><div><p>Nenhum jogo corresponde a “{query}”.</p><button class="button small" type="button" onclick={() => (query = '')}>Limpar busca</button></div></div>
+        <div class="empty-state catalog-empty">
+          <div>
+            <p>Nenhum jogo corresponde a “{query}”.</p>
+            <button
+              class="button small"
+              type="button"
+              onclick={() => (query = '')}>Limpar busca</button
+            >
+          </div>
+        </div>
       {:else}
         <div class="cover-wall">
           {#each filteredItems as item, index (item.id)}
-            <article class:selected={selectedIds.includes(item.id)} class="cover-placard">
-              <button class="cover-button" type="button" onclick={() => toggleItem(item.id)} aria-pressed={selectedIds.includes(item.id)} aria-label={`${selectedIds.includes(item.id) ? 'Remover' : 'Adicionar'} ${item.title}`}>
+            <article
+              class:selected={selectedIds.includes(item.id)}
+              class="cover-placard"
+            >
+              <button
+                class="cover-button"
+                type="button"
+                onclick={() => toggleItem(item.id)}
+                aria-pressed={selectedIds.includes(item.id)}
+                aria-label={`${selectedIds.includes(item.id) ? 'Remover' : 'Adicionar'} ${item.title}`}
+              >
                 <span class="cover-image-wrap">
                   {#if item.featureImage}
                     <img
@@ -255,16 +395,31 @@
                       referrerpolicy="no-referrer"
                     />
                   {:else}
-                    <span class="cover-fallback" aria-hidden="true">{item.title.slice(0, 1)}</span>
+                    <span class="cover-fallback" aria-hidden="true"
+                      >{item.title.slice(0, 1)}</span
+                    >
                   {/if}
-                  <span class="selection-mark" aria-hidden="true">{#if selectedIds.includes(item.id)}<TallyMark size={24} />{/if}</span>
+                  <span class="selection-mark" aria-hidden="true"
+                    >{#if selectedIds.includes(item.id)}<TallyMark
+                        size={24}
+                      />{/if}</span
+                  >
                 </span>
                 <span class="placard-meta">
                   <span class="placard-title">{item.title}</span>
-                  <span class="placard-number">{String(index + 1).padStart(4, '0')}</span>
+                  <span class="placard-number"
+                    >{String(index + 1).padStart(4, '0')}</span
+                  >
                 </span>
               </button>
-              <a class="placard-source" href={item.url} target="_blank" rel="noreferrer" aria-label={`Abrir ${item.title} no Mello Games`}><Icon name="external" size={14} /></a>
+              <a
+                class="placard-source"
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Abrir ${item.title} no Mello Games`}
+                ><Icon name="external" size={14} /></a
+              >
             </article>
           {/each}
         </div>
@@ -275,27 +430,56 @@
       <div class="dock-selected">
         <div class="dock-heading-row">
           <div>
-            <p class="dock-label" id="dock-title">Selecionados <span class="dock-count">{selectedItems.length}</span></p>
+            <p class="dock-label" id="dock-title">
+              Selecionados <span class="dock-count">{selectedItems.length}</span
+              >
+            </p>
             {#if selectedItems.length < POLL_LIMITS.minOptions}
-              <p class="dock-hint">Escolha pelo menos {POLL_LIMITS.minOptions} jogos para continuar.</p>
+              <p class="dock-hint">
+                Escolha pelo menos {POLL_LIMITS.minOptions} jogos para continuar.
+              </p>
             {:else}
               <p class="dock-hint">Você pode escolher quantos jogos quiser.</p>
             {/if}
           </div>
-          {#if selectedItems.length > 0}<button class="dock-clear" type="button" onclick={clearSelection}>Limpar seleção</button>{/if}
+          {#if selectedItems.length > 0}<button
+              class="dock-clear"
+              type="button"
+              onclick={clearSelection}>Limpar seleção</button
+            >{/if}
         </div>
         {#if selectedItems.length > 0}
           <div class="selected-slips" aria-label="Jogos escolhidos">
             {#each selectedItems.slice(0, 8) as item (item.id)}
-              <button class="selected-slip" type="button" onclick={() => removeItem(item.id)} aria-label={`Remover ${item.title}`}>
-                {#if item.featureImage}<img src={item.featureImage} alt="" loading="lazy" referrerpolicy="no-referrer" />{:else}<span class="slip-fallback" aria-hidden="true">{item.title.slice(0, 1)}</span>{/if}
-                <span>{item.title}</span><span class="slip-remove" aria-hidden="true"><Icon name="x" size={13} /></span>
+              <button
+                class="selected-slip"
+                type="button"
+                onclick={() => removeItem(item.id)}
+                aria-label={`Remover ${item.title}`}
+              >
+                {#if item.featureImage}<img
+                    src={item.featureImage}
+                    alt=""
+                    loading="lazy"
+                    referrerpolicy="no-referrer"
+                  />{:else}<span class="slip-fallback" aria-hidden="true"
+                    >{item.title.slice(0, 1)}</span
+                  >{/if}
+                <span>{item.title}</span><span
+                  class="slip-remove"
+                  aria-hidden="true"><Icon name="x" size={13} /></span
+                >
               </button>
             {/each}
-            {#if selectedItems.length > 8}<span class="more-slips">+ {selectedItems.length - 8} outros</span>{/if}
+            {#if selectedItems.length > 8}<span class="more-slips"
+                >+ {selectedItems.length - 8} outros</span
+              >{/if}
           </div>
         {:else}
-          <p class="dock-empty">A cédula está em branco. Clique nos placares acima para adicionar opções.</p>
+          <p class="dock-empty">
+            A cédula está em branco. Clique nos placares acima para adicionar
+            opções.
+          </p>
         {/if}
       </div>
 
@@ -303,39 +487,103 @@
         <div class="dock-form-fields">
           <label>
             <span class="dock-label">Título da votação</span>
-            <input class="dock-title-input" type="text" value={title} oninput={updateTitle} maxlength={POLL_LIMITS.maxTitleLength} placeholder="O que vamos jogar no sábado?" />
-            <span class="dock-input-meta">{title.length}/{POLL_LIMITS.maxTitleLength}</span>
+            <input
+              class="dock-title-input"
+              type="text"
+              value={title}
+              oninput={updateTitle}
+              maxlength={POLL_LIMITS.maxTitleLength}
+              placeholder="O que vamos jogar no sábado?"
+            />
+            <span class="dock-input-meta"
+              >{title.length}/{POLL_LIMITS.maxTitleLength}</span
+            >
           </label>
           <fieldset class="duration-fieldset">
             <legend class="dock-label">Expira em</legend>
             <div class="duration-options">
-              <label class:active={durationHours === 24} class="duration-option"><input type="radio" name="duration" value="24" checked={durationHours === 24} onchange={() => (durationHours = 24)} /><Icon name="clock" size={19} /><span>24 horas</span></label>
-              <label class:active={durationHours === 72} class="duration-option"><input type="radio" name="duration" value="72" checked={durationHours === 72} onchange={() => (durationHours = 72)} /><Icon name="calendar" size={19} /><span>3 dias</span></label>
-              <label class:active={durationHours === 168} class="duration-option"><input type="radio" name="duration" value="168" checked={durationHours === 168} onchange={() => (durationHours = 168)} /><Icon name="calendar" size={19} /><span>7 dias</span></label>
-              <label class:active={durationHours === 336} class="duration-option"><input type="radio" name="duration" value="336" checked={durationHours === 336} onchange={() => (durationHours = 336)} /><Icon name="calendar" size={19} /><span>14 dias</span></label>
+              <label class:active={durationHours === 24} class="duration-option"
+                ><input
+                  type="radio"
+                  name="duration"
+                  value="24"
+                  checked={durationHours === 24}
+                  onchange={() => (durationHours = 24)}
+                /><Icon name="clock" size={19} /><span>24 horas</span></label
+              >
+              <label class:active={durationHours === 72} class="duration-option"
+                ><input
+                  type="radio"
+                  name="duration"
+                  value="72"
+                  checked={durationHours === 72}
+                  onchange={() => (durationHours = 72)}
+                /><Icon name="calendar" size={19} /><span>3 dias</span></label
+              >
+              <label
+                class:active={durationHours === 168}
+                class="duration-option"
+                ><input
+                  type="radio"
+                  name="duration"
+                  value="168"
+                  checked={durationHours === 168}
+                  onchange={() => (durationHours = 168)}
+                /><Icon name="calendar" size={19} /><span>7 dias</span></label
+              >
+              <label
+                class:active={durationHours === 336}
+                class="duration-option"
+                ><input
+                  type="radio"
+                  name="duration"
+                  value="336"
+                  checked={durationHours === 336}
+                  onchange={() => (durationHours = 336)}
+                /><Icon name="calendar" size={19} /><span>14 dias</span></label
+              >
             </div>
           </fieldset>
           {#if turnstileToken || import.meta.env.PUBLIC_TURNSTILE_SITE_KEY}
-            <TurnstileWidget onToken={(token) => (turnstileToken = token)} resetKey={turnstileResetKey} />
+            <TurnstileWidget
+              onToken={(token) => (turnstileToken = token)}
+              resetKey={turnstileResetKey}
+            />
           {/if}
         </div>
         <div class="dock-submit">
-          <button class="create-button" type="button" onclick={createPoll} disabled={!canCreate}>
-            {#if creating}<span class="button-loader" aria-hidden="true"></span> Criando…{:else}Criar votação <Icon name="arrow-right" size={25} strokeWidth={2.3} />{/if}
+          <button
+            class="create-button"
+            type="button"
+            onclick={createPoll}
+            disabled={!canCreate}
+          >
+            {#if creating}<span class="button-loader" aria-hidden="true"></span>
+              Criando…{:else}Criar votação <Icon
+                name="arrow-right"
+                size={25}
+                strokeWidth={2.3}
+              />{/if}
           </button>
         </div>
       </div>
     </section>
 
     <div class="mobile-action-strip" aria-live="polite">
-      <span><strong>{selectedItems.length}</strong> {selectedItems.length === 1 ? 'escolhido' : 'escolhidos'}</span>
+      <span
+        ><strong>{selectedItems.length}</strong>
+        {selectedItems.length === 1 ? 'escolhido' : 'escolhidos'}</span
+      >
       <button type="button" onclick={createPoll} disabled={!canCreate}>
-        {creating ? 'Criando…' : 'Criar votação'} <Icon name="arrow-right" size={18} />
+        {creating ? 'Criando…' : 'Criar votação'}
+        <Icon name="arrow-right" size={18} />
       </button>
     </div>
 
     {#if createError}
-      <p class="notice error create-error" role="alert"><Icon name="x" size={18} /> <span>{createError}</span></p>
+      <p class="notice error create-error" role="alert">
+        <Icon name="x" size={18} /> <span>{createError}</span>
+      </p>
     {/if}
   {/if}
 {/if}
@@ -462,8 +710,17 @@
     background: var(--paper-bright);
     box-shadow: var(--shadow-small);
     overflow: hidden;
-    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
-    transition: transform 180ms ease, box-shadow 180ms ease;
+    clip-path: polygon(
+      0 0,
+      calc(100% - 10px) 0,
+      100% 10px,
+      100% 100%,
+      10px 100%,
+      0 calc(100% - 10px)
+    );
+    transition:
+      transform 180ms ease,
+      box-shadow 180ms ease;
   }
 
   .cover-placard:hover,
@@ -531,7 +788,9 @@
     background: var(--citrus);
     opacity: 0;
     transform: scale(0.8) rotate(-3deg);
-    transition: opacity 160ms ease, transform 160ms ease;
+    transition:
+      opacity 160ms ease,
+      transform 160ms ease;
   }
 
   .cover-placard.selected .selection-mark {
@@ -607,7 +866,16 @@
     position: sticky;
     bottom: 0;
     z-index: 4;
-    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
+    clip-path: polygon(
+      10px 0,
+      calc(100% - 10px) 0,
+      100% 10px,
+      100% calc(100% - 10px),
+      calc(100% - 10px) 100%,
+      10px 100%,
+      0 calc(100% - 10px),
+      0 10px
+    );
   }
 
   .dock-heading-row {
@@ -669,7 +937,14 @@
     background: var(--paper-bright);
     color: var(--ink);
     text-align: left;
-    clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 7px 100%, 0 calc(100% - 7px));
+    clip-path: polygon(
+      0 0,
+      calc(100% - 7px) 0,
+      100% 7px,
+      100% 100%,
+      7px 100%,
+      0 calc(100% - 7px)
+    );
     animation: slip-to-dock 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
@@ -819,8 +1094,19 @@
     font-weight: 900;
     letter-spacing: 0.01em;
     line-height: 0.9;
-    transition: transform 150ms ease, background 150ms ease;
-    clip-path: polygon(9px 0, calc(100% - 9px) 0, 100% 9px, 100% calc(100% - 9px), calc(100% - 9px) 100%, 9px 100%, 0 calc(100% - 9px), 0 9px);
+    transition:
+      transform 150ms ease,
+      background 150ms ease;
+    clip-path: polygon(
+      9px 0,
+      calc(100% - 9px) 0,
+      100% 9px,
+      100% calc(100% - 9px),
+      calc(100% - 9px) 100%,
+      9px 100%,
+      0 calc(100% - 9px),
+      0 9px
+    );
   }
 
   .create-button:hover:not(:disabled) {
@@ -843,7 +1129,9 @@
   }
 
   @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   @keyframes slip-to-dock {
@@ -1040,7 +1328,16 @@
       background: var(--cobalt);
       color: white;
       box-shadow: 0 12px 28px rgb(8 55 182 / 0.28);
-      clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+      clip-path: polygon(
+        8px 0,
+        calc(100% - 8px) 0,
+        100% 8px,
+        100% calc(100% - 8px),
+        calc(100% - 8px) 100%,
+        8px 100%,
+        0 calc(100% - 8px),
+        0 8px
+      );
     }
 
     .mobile-action-strip strong {
@@ -1061,7 +1358,14 @@
       font-family: var(--font-display);
       font-size: 1rem;
       font-weight: 900;
-      clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+      clip-path: polygon(
+        6px 0,
+        100% 0,
+        100% calc(100% - 6px),
+        calc(100% - 6px) 100%,
+        0 100%,
+        0 6px
+      );
     }
 
     .mobile-action-strip button:disabled {

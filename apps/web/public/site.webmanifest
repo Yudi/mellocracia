@@ -1,7 +1,7 @@
 {
   "name": "Mellocracia",
   "short_name": "Mellocracia",
-  "description": "Votações para escolher a próxima jogatina.",
+  "description": "Vote nos próximos jogos.",
   "lang": "pt-BR",
   "start_url": "/",
   "display": "standalone",
