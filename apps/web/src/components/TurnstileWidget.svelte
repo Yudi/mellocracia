@@ -1,17 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getTurnstileSiteKey, loadTurnstile, type TurnstileInstance } from '../lib/turnstile';
+  import { loadTurnstile, type TurnstileInstance } from '../lib/turnstile';
 
   export let onToken: (token: string | undefined) => void = () => undefined;
   export let resetKey = 0;
+  export let siteKey: string | undefined;
 
   let host: HTMLDivElement;
   let turnstile: TurnstileInstance | null = null;
   let widgetId: string | undefined;
-  let siteKey: string | undefined;
 
   onMount(() => {
-    siteKey = getTurnstileSiteKey();
     if (!siteKey) return undefined;
 
     let cancelled = false;

@@ -8,6 +8,7 @@ const { token } = Astro.params;
 if (!token) {
   return Astro.redirect('/');
 }
+const turnstileSiteKey = process.env.PUBLIC_TURNSTILE_SITE_KEY?.trim() || undefined;
 ---
 
 <BaseLayout
@@ -17,5 +18,5 @@ if (!token) {
   socialImagePath="/og/mellocracia-vote.png"
   socialImageAlt="Mellocracia: hora de votar no próximo jogo."
 >
-  <VotePoll client:load token={token} />
+  <VotePoll client:load token={token} turnstileSiteKey={turnstileSiteKey} />
 </BaseLayout>

@@ -11,6 +11,8 @@
   import TurnstileWidget from './TurnstileWidget.svelte';
   import { api, describeApiError, isRateLimitError } from '../lib/api';
 
+  export let turnstileSiteKey: string | undefined;
+
   type DurationHours = 24 | 72 | 168 | 336;
   type CopyTarget = 'vote' | 'results';
 
@@ -544,8 +546,9 @@
               >
             </div>
           </fieldset>
-          {#if turnstileToken || import.meta.env.PUBLIC_TURNSTILE_SITE_KEY}
+          {#if turnstileSiteKey}
             <TurnstileWidget
+              siteKey={turnstileSiteKey}
               onToken={(token) => (turnstileToken = token)}
               resetKey={turnstileResetKey}
             />

@@ -7,6 +7,7 @@
   import { api, describeApiError, isDuplicateVoteError, isExpiredError, isRateLimitError, ApiClientError } from '../lib/api';
 
   export let token: string;
+  export let turnstileSiteKey: string | undefined;
 
   let poll: PollResponse | null = null;
   let loading = true;
@@ -121,8 +122,12 @@
         </div>
       </fieldset>
 
-      {#if import.meta.env.PUBLIC_TURNSTILE_SITE_KEY}
-        <TurnstileWidget onToken={(value) => (turnstileToken = value)} resetKey={turnstileResetKey} />
+      {#if turnstileSiteKey}
+        <TurnstileWidget
+          siteKey={turnstileSiteKey}
+          onToken={(value) => (turnstileToken = value)}
+          resetKey={turnstileResetKey}
+        />
       {/if}
 
       <div class="ballot-submit-row">

@@ -20,11 +20,6 @@ declare global {
 
 let scriptPromise: Promise<TurnstileInstance | null> | undefined;
 
-export function getTurnstileSiteKey(): string | undefined {
-  const key = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
-  return key || undefined;
-}
-
 export function loadTurnstile(): Promise<TurnstileInstance | null> {
   if (typeof window === 'undefined') return Promise.resolve(null);
   if (window.turnstile) return Promise.resolve(window.turnstile);

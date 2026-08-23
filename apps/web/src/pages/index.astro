@@ -3,6 +3,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import Creator from '../components/Creator.svelte';
 
 export const prerender = false;
+const turnstileSiteKey = process.env.PUBLIC_TURNSTILE_SITE_KEY?.trim() || undefined;
 ---
 
 <BaseLayout
@@ -10,5 +11,5 @@ export const prerender = false;
   description="Escolha jogos do catálogo do Mello Games, compartilhe a votação e acompanhe a escolha da mesa."
   canonicalPath="/"
 >
-  <Creator client:load />
+  <Creator client:load turnstileSiteKey={turnstileSiteKey} />
 </BaseLayout>
