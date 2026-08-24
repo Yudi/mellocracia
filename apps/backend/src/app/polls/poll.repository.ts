@@ -20,6 +20,7 @@ export interface PollRecord {
   title: string;
   expiresAt: Date;
   totalVotes: number;
+  hasVoted: boolean;
   options: PollSnapshotOption[];
 }
 
@@ -27,7 +28,7 @@ export interface CreatePollRecord {
   id: string;
   title: string;
   shareTokenHash: string;
-  resultsTokenHash: string;
+  editTokenHash: string;
   expiresAt: Date;
   options: readonly PollOption[];
 }
@@ -42,7 +43,7 @@ export class PollRepository {
         id: record.id,
         title: record.title,
         shareTokenHash: record.shareTokenHash,
-        resultsTokenHash: record.resultsTokenHash,
+        editTokenHash: record.editTokenHash,
         expiresAt: record.expiresAt,
         options: {
           create: record.options.map((option, position) => ({
@@ -62,20 +63,24 @@ export class PollRepository {
 
   async findByShareTokenHash(
     shareTokenHash: string,
+    voterNonceHash?: string,
   ): Promise<PollRecord | undefined> {
-    return this.findByTokenHash({ shareTokenHash });
+    return this.findByTokenHash({ shareTokenHash }, voterNonceHash);
   }
 
-  async findByResultsTokenHash(
-    resultsTokenHash: string,
+  async findByEditTokenHash(
+    editTokenHash: string,
   ): Promise<PollRecord | undefined> {
-    return this.findByTokenHash({ resultsTokenHash });
+    return this.findByTokenHash({ editTokenHash });
   }
 
-  private async findByTokenHash(token: {
-    shareTokenHash?: string;
-    resultsTokenHash?: string;
-  }): Promise<PollRecord | undefined> {
+  private async findByTokenHash(
+    token: {
+      shareTokenHash?: string;
+      editTokenHash?: string;
+    },
+    voterNonceHash?: string,
+  ): Promise<PollRecord | undefined> {
     const poll = await this.database.prisma.poll.findFirst({
       where: {
         ...token,
@@ -84,6 +89,11 @@ export class PollRepository {
       include: {
         options: {
           orderBy: { position: 'asc' },
+        },
+        votes: {
+          where: { voterNonceHash: voterNonceHash ?? '' },
+          select: { pollId: true },
+          take: 1,
         },
       },
     });
@@ -97,6 +107,7 @@ export class PollRepository {
       title: poll.title,
       expiresAt: poll.expiresAt,
       totalVotes: poll.totalVotes,
+      hasVoted: poll.votes.length > 0,
       options: poll.options.map((option) => ({
         id: option.postId,
         title: option.title,
@@ -109,6 +120,43 @@ export class PollRepository {
         votes: option.voteCount,
       })),
     };
+  }
+
+  async replaceOptions(
+    pollId: string,
+    options: readonly PollOption[],
+  ): Promise<'updated' | 'expired' | 'voted'> {
+    return this.database.prisma.$transaction(
+      async (transaction) => {
+        const poll = await transaction.poll.findFirst({
+          where: { id: pollId, expiresAt: { gt: new Date() } },
+          select: { totalVotes: true },
+        });
+        if (!poll) {
+          return 'expired';
+        }
+        if (poll.totalVotes > 0) {
+          return 'voted';
+        }
+
+        await transaction.pollOption.deleteMany({ where: { pollId } });
+        await transaction.pollOption.createMany({
+          data: options.map((option, position) => ({
+            pollId,
+            postId: option.id,
+            title: option.title,
+            excerpt: option.excerpt,
+            tags: option.tags,
+            featureImage: option.featureImage,
+            featureImageAlt: option.featureImageAlt,
+            sourceUrl: option.sourceUrl,
+            position,
+          })),
+        });
+        return 'updated';
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   }
 
   async castVote(
@@ -141,7 +189,7 @@ export class PollRepository {
     throw new Error('Vote transaction exhausted retries');
   }
 
-  async findResults(resultsTokenHash: string): Promise<
+  async findResults(shareTokenHash: string): Promise<
     | {
         title: string;
         expiresAt: Date;
@@ -150,7 +198,7 @@ export class PollRepository {
       }
     | undefined
   > {
-    const record = await this.findByResultsTokenHash(resultsTokenHash);
+    const record = await this.findByShareTokenHash(shareTokenHash);
     if (!record) {
       return undefined;
     }

@@ -15,16 +15,16 @@ export class ResultsController {
     private readonly config: AppConfig,
   ) {}
 
-  @Get(':resultsToken')
+  @Get(':shareToken')
   async get(
-    @Param('resultsToken') resultsToken: string,
+    @Param('shareToken') shareToken: string,
     @Req() request: unknown,
   ): Promise<PollResultsResponse> {
-    const candidate = resultsToken.length <= 128 ? resultsToken : 'invalid';
+    const candidate = shareToken.length <= 128 ? shareToken : 'invalid';
     await this.rateLimit.enforceResults(
       this.clientIp.hashRequestIp(request),
       hashSecret(candidate, this.config.tokenHashSecret),
     );
-    return this.polls.getResults(resultsToken);
+    return this.polls.getResults(shareToken);
   }
 }

@@ -60,6 +60,9 @@ export class AppConfig {
   readonly resultsPathPrefix = this.normalizePathPrefix(
     process.env.RESULTS_PATH_PREFIX ?? '/r',
   );
+  readonly editPathPrefix = this.normalizePathPrefix(
+    process.env.EDIT_PATH_PREFIX ?? '/e',
+  );
 
   readonly ghostContentApiUrl = withoutTrailingSlash(
     process.env.GHOST_CONTENT_API_URL ??

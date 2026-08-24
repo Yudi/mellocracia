@@ -18,8 +18,10 @@
   let submitting = false;
   let submitted = false;
   let submitError = '';
-  let duplicate = false;
+  let hasVoted = false;
   let expired = false;
+
+  $: resultsPath = `/r/${encodeURIComponent(token)}`;
 
   onMount(() => {
     void loadPoll();
@@ -29,9 +31,11 @@
     loading = true;
     loadError = '';
     expired = false;
+    hasVoted = false;
 
     try {
       poll = await api.getPoll(token);
+      hasVoted = poll.hasVoted;
     } catch (error) {
       loadError = describeApiError(error, 'Este link não pôde ser carregado.');
       expired = isExpiredError(error) || (error instanceof ApiClientError && error.status === 410);
@@ -44,7 +48,6 @@
     if (selectedOptionIds.length === 0 || submitting || submitted) return;
     submitting = true;
     submitError = '';
-    duplicate = false;
 
     try {
       await api.castVote(token, {
@@ -53,7 +56,7 @@
       });
       submitted = true;
     } catch (error) {
-      duplicate = isDuplicateVoteError(error) || (error instanceof ApiClientError && ['VOTE_EXISTS', 'ALREADY_SUBMITTED'].includes(error.code));
+      hasVoted = isDuplicateVoteError(error) || (error instanceof ApiClientError && ['VOTE_EXISTS', 'ALREADY_SUBMITTED'].includes(error.code));
       expired = isExpiredError(error) || (error instanceof ApiClientError && error.status === 410);
       submitError = describeApiError(error, 'Não foi possível registrar seu voto.');
       turnstileResetKey += 1;
@@ -86,12 +89,12 @@
     <p>{expired ? 'O prazo desta votação terminou.' : loadError}</p>
     <a class="button cobalt" href="/">Montar uma nova votação <Icon name="arrow-right" size={18} /></a>
   </section>
-{:else if poll && submitted}
+{:else if poll && (submitted || hasVoted)}
   <section class="state-panel vote-success" aria-labelledby="vote-success-title">
     <span class="state-mark" aria-hidden="true"><Icon name="check" size={29} strokeWidth={2.6} /></span>
-    <h1 id="vote-success-title" class="display-title">Valeu. A mesa já <strong>contou seu voto.</strong></h1>
-    <p>O resultado fica com quem criou a votação. Você não precisa fazer mais nada por aqui.</p>
-    <a class="button" href="https://mello.yudi.com.br/" target="_blank" rel="noreferrer">Voltar ao Mello Games <Icon name="external" size={17} /></a>
+    <h1 id="vote-success-title" class="display-title">{hasVoted && !submitted ? 'Este navegador já ' : 'Valeu. A mesa já '}<strong>{hasVoted && !submitted ? 'votou nesta cédula.' : 'contou seu voto.'}</strong></h1>
+    <p>{hasVoted && !submitted ? 'Você já registrou seu voto nesta votação. Acompanhe a contagem da mesa quando quiser.' : 'Seu voto foi registrado. Acompanhe a contagem da mesa quando quiser.'}</p>
+    <a class="button primary" href={resultsPath}>Ver resultados <Icon name="arrow-right" size={17} /></a>
   </section>
 {:else if poll}
   <section class="poll-shell" aria-labelledby="poll-title">
@@ -102,9 +105,7 @@
       <p class="expiry-note"><Icon name="clock" size={19} /> encerra em<br /><strong>{formatDate(poll.expiresAt)}</strong></p>
     </div>
 
-    {#if duplicate}
-      <div class="notice error" role="alert"><Icon name="x" size={18} /><div><strong>Este voto já foi contado.</strong>{submitError}</div></div>
-    {:else if expired}
+    {#if expired}
       <div class="notice error" role="alert"><Icon name="clock" size={18} /><div><strong>Esta votação encerrou.</strong> O prazo acabou enquanto você votava.</div></div>
     {:else if submitError}
       <div class="notice error" role="alert"><Icon name="x" size={18} /><div><strong>Não deu para registrar ainda.</strong>{submitError}</div></div>

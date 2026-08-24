@@ -14,7 +14,7 @@
   export let turnstileSiteKey: string | undefined;
 
   type DurationHours = 24 | 72 | 168 | 336;
-  type CopyTarget = 'vote' | 'results';
+  type CopyTarget = 'vote' | 'results' | 'edit';
 
   let items: CatalogItem[] = [];
   let filteredItems: CatalogItem[] = [];
@@ -32,6 +32,15 @@
   let createdPoll: CreatePollResponse | null = null;
   let copiedTarget: CopyTarget | null = null;
   let copyError = '';
+  let editLoading = false;
+  let editLoadError = '';
+  let expiresAt = '';
+  let saving = false;
+  let saved = false;
+
+  export let editToken: string | undefined = undefined;
+
+  $: isEditing = Boolean(editToken);
 
   $: filteredItems = items.filter((item) => {
     const normalizedQuery = query.trim().toLocaleLowerCase('pt-BR');
@@ -45,7 +54,7 @@
   $: canCreate =
     selectedItems.length >= POLL_LIMITS.minOptions &&
     title.trim().length > 0 &&
-    !creating;
+    !creating && !saving;
   $: allVisibleSelected =
     filteredItems.length > 0 &&
     filteredItems.every((item) => selectedIds.includes(item.id));
@@ -61,6 +70,7 @@
 
   onMount(() => {
     void loadCatalog();
+    if (editToken) void loadEditablePoll();
   });
 
   async function loadCatalog() {
@@ -82,12 +92,14 @@
   }
 
   function toggleItem(id: string) {
+    saved = false;
     selectedIds = selectedIds.includes(id)
       ? selectedIds.filter((selectedId) => selectedId !== id)
       : [...selectedIds, id];
   }
 
   function toggleVisibleItems() {
+    saved = false;
     if (allVisibleSelected) {
       const visibleIds = new Set(filteredItems.map((item) => item.id));
       selectedIds = selectedIds.filter((id) => !visibleIds.has(id));
@@ -100,10 +112,12 @@
   }
 
   function clearSelection() {
+    saved = false;
     selectedIds = [];
   }
 
   function removeItem(id: string) {
+    saved = false;
     selectedIds = selectedIds.filter((selectedId) => selectedId !== id);
   }
 
@@ -113,6 +127,26 @@
 
   function updateTitle(event: Event) {
     title = (event.currentTarget as HTMLInputElement).value;
+  }
+
+  async function loadEditablePoll() {
+    if (!editToken) return;
+    editLoading = true;
+    editLoadError = '';
+
+    try {
+      const poll = await api.getPollForEdit(editToken);
+      title = poll.title;
+      expiresAt = poll.expiresAt;
+      selectedIds = poll.options.map((option) => option.id);
+    } catch (error) {
+      editLoadError = describeApiError(
+        error,
+        'Este link de edição não pôde ser carregado.',
+      );
+    } finally {
+      editLoading = false;
+    }
   }
 
   async function createPoll() {
@@ -142,6 +176,29 @@
       }
     } finally {
       creating = false;
+    }
+  }
+
+  async function savePollChoices() {
+    if (!editToken || !canCreate) return;
+    saving = true;
+    createError = '';
+    saved = false;
+
+    try {
+      await api.updatePollChoices(editToken, { optionPostIds: selectedIds });
+      saved = true;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      createError = describeApiError(
+        error,
+        'Não foi possível salvar as escolhas da votação.',
+      );
+      if (isRateLimitError(error)) {
+        createError += ' Espere alguns segundos antes de tentar novamente.';
+      }
+    } finally {
+      saving = false;
     }
   }
 
@@ -175,7 +232,18 @@
   }
 </script>
 
-{#if createdPoll}
+{#if editLoading}
+  <div class="loading-state" aria-live="polite">
+    <div><div class="loading-mark" aria-hidden="true"></div><p>Abrindo a cédula para edição…</p></div>
+  </div>
+{:else if editLoadError}
+  <section class="state-panel" aria-labelledby="edit-error-title">
+    <span class="state-mark error-mark" aria-hidden="true"><Icon name="x" size={27} /></span>
+    <h1 id="edit-error-title" class="display-title">Não encontramos esta votação.</h1>
+    <p>{editLoadError}</p>
+    <a class="button cobalt" href="/">Montar uma nova votação <Icon name="arrow-right" size={18} /></a>
+  </section>
+{:else if createdPoll}
   <section class="success-panel" aria-labelledby="success-title">
     <div class="success-heading">
       <span class="success-stamp" aria-hidden="true"
@@ -186,8 +254,8 @@
           Agora é só <strong>compartilhar.</strong>
         </h1>
         <p class="page-intro-copy">
-          Os links expiram em {formatDate(createdPoll.expiresAt)}. Guarde o link
-          de resultados separado do link de votação.
+          Os links expiram em {formatDate(createdPoll.expiresAt)}. Compartilhe o
+          link de votação com a mesa e acompanhe os resultados no mesmo período.
         </p>
       </div>
     </div>
@@ -217,9 +285,33 @@
           </button>
         </div>
       </div>
+      <div class="share-row edit-link-row">
+        <div>
+          <span class="share-label">Link secreto para editar escolhas</span>
+          <a href={createdPoll.editUrl} target="_blank" rel="noreferrer"
+            >{absoluteUrl(createdPoll.editUrl)}</a
+          >
+        </div>
+        <div class="share-actions">
+          <a
+            class="button small"
+            href={createdPoll.editUrl}
+            target="_blank"
+            rel="noreferrer">Editar <Icon name="external" size={16} /></a
+          >
+          <button
+            class="button small primary"
+            type="button"
+            onclick={() => copyLink('edit', createdPoll?.editUrl ?? '')}
+          >
+            <Icon name="copy" size={16} />
+            {copiedTarget === 'edit' ? 'Copiado' : 'Copiar'}
+          </button>
+        </div>
+      </div>
       <div class="share-row">
         <div>
-          <span class="share-label">Link secreto de resultados</span>
+          <span class="share-label">Link de resultados</span>
           <a href={createdPoll.resultsUrl} target="_blank" rel="noreferrer"
             >{absoluteUrl(createdPoll.resultsUrl)}</a
           >
@@ -264,12 +356,21 @@
 {:else}
   <section class="page-intro creator-intro" aria-labelledby="creator-title">
     <div>
-      <h1 id="creator-title" class="display-title">
-        Monte a cédula dos <strong>próximos jogos.</strong>
-      </h1>
-      <p class="page-intro-copy">
-        Escolha os jogos, dê um nome para a votação e mande o link para a mesa.
-      </p>
+      {#if isEditing}
+        <h1 id="creator-title" class="display-title">
+          Ajuste os jogos da <strong>cédula.</strong>
+        </h1>
+        <p class="page-intro-copy">
+          Este link secreto permite trocar as escolhas antes do primeiro voto.
+        </p>
+      {:else}
+        <h1 id="creator-title" class="display-title">
+          Monte a cédula dos <strong>próximos jogos.</strong>
+        </h1>
+        <p class="page-intro-copy">
+          Escolha os jogos, dê um nome para a votação e mande o link para a mesa.
+        </p>
+      {/if}
     </div>
     <a
       class="source-link"
@@ -484,23 +585,30 @@
 
       <div class="dock-form">
         <div class="dock-form-fields">
-          <label>
-            <span class="dock-label">Título da votação</span>
-            <input
-              class="dock-title-input"
-              type="text"
-              value={title}
-              oninput={updateTitle}
-              maxlength={POLL_LIMITS.maxTitleLength}
-              placeholder="O que vamos jogar no sábado?"
-            />
-            <span class="dock-input-meta"
-              >{title.length}/{POLL_LIMITS.maxTitleLength}</span
-            >
-          </label>
-          <fieldset class="duration-fieldset">
-            <legend class="dock-label">Expira em</legend>
-            <div class="duration-options">
+          {#if isEditing}
+            <div class="edit-summary">
+              <span class="dock-label">Editando a votação</span>
+              <strong>{title}</strong>
+              <span>Expira em {formatDate(expiresAt)}</span>
+            </div>
+          {:else}
+            <label>
+              <span class="dock-label">Título da votação</span>
+              <input
+                class="dock-title-input"
+                type="text"
+                value={title}
+                oninput={updateTitle}
+                maxlength={POLL_LIMITS.maxTitleLength}
+                placeholder="O que vamos jogar no sábado?"
+              />
+              <span class="dock-input-meta"
+                >{title.length}/{POLL_LIMITS.maxTitleLength}</span
+              >
+            </label>
+            <fieldset class="duration-fieldset">
+              <legend class="dock-label">Expira em</legend>
+              <div class="duration-options">
               <label class:active={durationHours === 24} class="duration-option"
                 ><input
                   type="radio"
@@ -541,9 +649,10 @@
                   onchange={() => (durationHours = 336)}
                 /><Icon name="calendar" size={19} /><span>14 dias</span></label
               >
-            </div>
-          </fieldset>
-          {#if turnstileSiteKey}
+              </div>
+            </fieldset>
+          {/if}
+          {#if turnstileSiteKey && !isEditing}
             <TurnstileWidget
               siteKey={turnstileSiteKey}
               onToken={(token) => (turnstileToken = token)}
@@ -555,11 +664,11 @@
           <button
             class="create-button"
             type="button"
-            onclick={createPoll}
+            onclick={isEditing ? savePollChoices : createPoll}
             disabled={!canCreate}
           >
-            {#if creating}<span class="button-loader" aria-hidden="true"></span>
-              Criando…{:else}Criar votação <Icon
+            {#if creating || saving}<span class="button-loader" aria-hidden="true"></span>
+              {isEditing ? 'Salvando…' : 'Criando…'}{:else}{isEditing ? 'Salvar escolhas' : 'Criar votação'} <Icon
                 name="arrow-right"
                 size={25}
                 strokeWidth={2.3}
@@ -574,8 +683,8 @@
         ><strong>{selectedItems.length}</strong>
         {selectedItems.length === 1 ? 'escolhido' : 'escolhidos'}</span
       >
-      <button type="button" onclick={createPoll} disabled={!canCreate}>
-        {creating ? 'Criando…' : 'Criar votação'}
+      <button type="button" onclick={isEditing ? savePollChoices : createPoll} disabled={!canCreate}>
+        {creating || saving ? (isEditing ? 'Salvando…' : 'Criando…') : isEditing ? 'Salvar escolhas' : 'Criar votação'}
         <Icon name="arrow-right" size={18} />
       </button>
     </div>
@@ -583,6 +692,11 @@
     {#if createError}
       <p class="notice error create-error" role="alert">
         <Icon name="x" size={18} /> <span>{createError}</span>
+      </p>
+    {/if}
+    {#if saved}
+      <p class="notice success" role="status">
+        <Icon name="check" size={18} /> Escolhas atualizadas. A cédula já usa a nova seleção.
       </p>
     {/if}
   {/if}
@@ -603,6 +717,40 @@
 
   .creator-intro {
     min-height: 245px;
+  }
+
+  .state-panel {
+    max-width: 780px;
+    margin: 22px auto 0;
+    border-top: 2px solid var(--ink);
+    padding: 30px 0 14px;
+  }
+
+  .state-panel .display-title {
+    max-width: 14ch;
+  }
+
+  .state-panel > p {
+    max-width: 48ch;
+    margin: 18px 0 22px;
+    color: var(--ink-soft);
+    line-height: 1.55;
+  }
+
+  .state-mark {
+    display: grid;
+    place-items: center;
+    width: 55px;
+    height: 55px;
+    margin-bottom: 24px;
+    border: 2px solid var(--ink);
+    background: var(--citrus);
+    transform: rotate(-3deg);
+  }
+
+  .error-mark {
+    background: var(--paper-bright);
+    color: var(--signal);
   }
 
   .creator-intro .source-link {
@@ -693,6 +841,26 @@
     margin: 12px 0 -4px;
     color: var(--ink-soft);
     font-size: 0.78rem;
+  }
+
+  .edit-summary {
+    display: grid;
+    align-content: center;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .edit-summary strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-display);
+    font-size: 1.55rem;
+  }
+
+  .edit-summary > span:last-child {
+    color: rgb(255 255 255 / 0.76);
+    font-size: 0.85rem;
   }
 
   .cover-wall {

@@ -1,0 +1,19 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Creator from '../../components/Creator.svelte';
+
+export const prerender = false;
+
+const { token } = Astro.params;
+if (!token) {
+  return Astro.redirect('/');
+}
+---
+
+<BaseLayout
+  title="Edite as escolhas da votação"
+  description="Atualize os jogos disponíveis na votação antes que a mesa comece a votar."
+  canonicalPath="/"
+>
+  <Creator client:load editToken={token} />
+</BaseLayout>

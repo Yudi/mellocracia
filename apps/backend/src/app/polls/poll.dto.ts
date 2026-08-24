@@ -52,3 +52,12 @@ export class CastVoteDto {
   @MaxLength(2_048)
   turnstileToken?: string;
 }
+
+export class UpdatePollChoicesDto {
+  @IsArray()
+  @ArrayMinSize(POLL_LIMITS.minOptions)
+  @ArrayMaxSize(POLL_LIMITS.maxOptions)
+  @IsString({ each: true })
+  @MaxLength(256, { each: true })
+  optionPostIds!: string[];
+}

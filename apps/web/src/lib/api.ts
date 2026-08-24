@@ -7,6 +7,8 @@ import type {
   CreatePollResponse,
   PollResponse,
   PollResultsResponse,
+  UpdatePollChoicesRequest,
+  UpdatePollChoicesResponse,
 } from '@mellocracia/contracts';
 
 const configuredBaseUrl = import.meta.env.PUBLIC_API_BASE_URL;
@@ -91,6 +93,23 @@ export const api = {
 
   getPoll(token: string): Promise<PollResponse> {
     return request<PollResponse>(`/polls/${encodeURIComponent(token)}`);
+  },
+
+  getPollForEdit(token: string): Promise<PollResponse> {
+    return request<PollResponse>(`/polls/edit/${encodeURIComponent(token)}`);
+  },
+
+  updatePollChoices(
+    token: string,
+    payload: UpdatePollChoicesRequest,
+  ): Promise<UpdatePollChoicesResponse> {
+    return request<UpdatePollChoicesResponse>(
+      `/polls/edit/${encodeURIComponent(token)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      },
+    );
   },
 
   castVote(token: string, payload: CastVoteRequest): Promise<CastVoteResponse> {

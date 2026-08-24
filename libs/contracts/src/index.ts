@@ -35,6 +35,7 @@ export interface CreatePollRequest {
 export interface CreatePollResponse {
   voteUrl: string;
   resultsUrl: string;
+  editUrl: string;
   expiresAt: string;
   optionCount: number;
 }
@@ -52,7 +53,17 @@ export interface PollOption {
 export interface PollResponse {
   title: string;
   expiresAt: string;
+  hasVoted: boolean;
   options: PollOption[];
+}
+
+export interface UpdatePollChoicesRequest {
+  optionPostIds: string[];
+}
+
+export interface UpdatePollChoicesResponse {
+  updated: true;
+  optionCount: number;
 }
 
 export interface CastVoteRequest {

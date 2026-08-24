@@ -25,6 +25,17 @@ export function validatePollCreationInput(
       message: `Duration must be between ${POLL_LIMITS.minDurationHours} and ${POLL_LIMITS.maxDurationHours} hours`,
     });
   }
+  const optionPostIdsResult = validatePollOptionPostIds(
+    optionPostIds,
+    maxOptions,
+  );
+  return { title, durationHours, optionPostIds: optionPostIdsResult };
+}
+
+export function validatePollOptionPostIds(
+  optionPostIds: unknown,
+  maxOptions: number,
+): string[] {
   if (!Array.isArray(optionPostIds)) {
     throw new BadRequestException({
       code: 'INVALID_OPTIONS',
@@ -50,7 +61,7 @@ export function validatePollCreationInput(
       message: 'Each post can only appear once',
     });
   }
-  return { title, durationHours, optionPostIds: ids };
+  return ids;
 }
 
 export function validateVoteOptionIds(

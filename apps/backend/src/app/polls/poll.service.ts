@@ -11,6 +11,8 @@ import {
   CreatePollResponse,
   PollResponse,
   PollResultsResponse,
+  UpdatePollChoicesRequest,
+  UpdatePollChoicesResponse,
 } from '@mellocracia/contracts';
 import { randomUUID } from 'node:crypto';
 import { AppConfig } from '../config/app-config';
@@ -18,6 +20,7 @@ import { CatalogService } from '../catalog/catalog.service';
 import { PollRepository } from './poll.repository';
 import {
   validatePollCreationInput,
+  validatePollOptionPostIds,
   validateVoteOptionIds,
 } from './poll.validation';
 import {
@@ -66,37 +69,36 @@ export class PollService {
     }
 
     const shareToken = createOpaqueToken();
-    const resultsToken = createOpaqueToken();
+    const editToken = createOpaqueToken();
     const expiresAt = new Date(Date.now() + durationHours * 60 * 60 * 1_000);
     await this.repository.create({
       id: randomUUID(),
       title,
       shareTokenHash: hashSecret(shareToken, this.config.tokenHashSecret),
-      resultsTokenHash: hashSecret(resultsToken, this.config.tokenHashSecret),
+      editTokenHash: hashSecret(editToken, this.config.tokenHashSecret),
       expiresAt,
-      options: (selected as CatalogItem[]).map((item) => ({
-        id: item.id,
-        title: item.title,
-        excerpt: item.excerpt,
-        tags: item.tags,
-        featureImage: item.featureImage,
-        featureImageAlt: item.featureImageAlt,
-        sourceUrl: item.url,
-      })),
+      options: this.toSnapshotOptions(selected as CatalogItem[]),
     });
 
     return {
       voteUrl: `${this.config.publicOrigin}${this.config.votePathPrefix}/${shareToken}`,
-      resultsUrl: `${this.config.publicOrigin}${this.config.resultsPathPrefix}/${resultsToken}`,
+      resultsUrl: `${this.config.publicOrigin}${this.config.resultsPathPrefix}/${shareToken}`,
+      editUrl: `${this.config.publicOrigin}${this.config.editPathPrefix}/${editToken}`,
       expiresAt: expiresAt.toISOString(),
       optionCount: selected.length,
     };
   }
 
-  async getPoll(shareToken: string): Promise<PollResponse> {
+  async getPoll(
+    shareToken: string,
+    voterNonce?: string,
+  ): Promise<PollResponse> {
     this.ensureOpaqueToken(shareToken);
     const record = await this.repository.findByShareTokenHash(
       hashSecret(shareToken, this.config.tokenHashSecret),
+      voterNonce
+        ? hashSecret(voterNonce, this.config.tokenHashSecret)
+        : undefined,
     );
     if (!record) {
       throw this.notFound();
@@ -104,6 +106,7 @@ export class PollService {
     return {
       title: record.title,
       expiresAt: record.expiresAt.toISOString(),
+      hasVoted: record.hasVoted,
       options: cryptographicallyShuffle(record.options).map((option) => ({
         id: option.id,
         title: option.title,
@@ -114,6 +117,72 @@ export class PollService {
         sourceUrl: option.sourceUrl,
       })),
     };
+  }
+
+  async getPollForEdit(editToken: string): Promise<PollResponse> {
+    this.ensureOpaqueToken(editToken);
+    const record = await this.repository.findByEditTokenHash(
+      hashSecret(editToken, this.config.tokenHashSecret),
+    );
+    if (!record) {
+      throw this.notFound();
+    }
+    return {
+      title: record.title,
+      expiresAt: record.expiresAt.toISOString(),
+      hasVoted: false,
+      options: record.options.map((option) => ({
+        id: option.id,
+        title: option.title,
+        excerpt: option.excerpt,
+        tags: option.tags,
+        featureImage: option.featureImage,
+        featureImageAlt: option.featureImageAlt,
+        sourceUrl: option.sourceUrl,
+      })),
+    };
+  }
+
+  async updatePollChoices(
+    editToken: string,
+    input: UpdatePollChoicesRequest,
+  ): Promise<UpdatePollChoicesResponse> {
+    this.ensureOpaqueToken(editToken);
+    const optionPostIds = validatePollOptionPostIds(
+      input.optionPostIds,
+      this.config.maxPollOptions,
+    );
+    const record = await this.repository.findByEditTokenHash(
+      hashSecret(editToken, this.config.tokenHashSecret),
+    );
+    if (!record) {
+      throw this.notFound();
+    }
+
+    const catalog = await this.catalog.getFreshOrStaleCatalog();
+    const catalogById = new Map(catalog.items.map((item) => [item.id, item]));
+    const selected = optionPostIds.map((id) => catalogById.get(id));
+    if (selected.some((item) => !item)) {
+      throw new BadRequestException({
+        code: 'INVALID_OPTIONS',
+        message: 'One or more selected posts are no longer available',
+      });
+    }
+
+    const result = await this.repository.replaceOptions(
+      record.id,
+      this.toSnapshotOptions(selected as CatalogItem[]),
+    );
+    if (result === 'expired') {
+      throw this.notFound();
+    }
+    if (result === 'voted') {
+      throw new ConflictException({
+        code: 'POLL_ALREADY_VOTED',
+        message: 'Poll choices cannot change after voting has started',
+      });
+    }
+    return { updated: true, optionCount: selected.length };
   }
 
   async castVote(
@@ -170,10 +239,10 @@ export class PollService {
     return { accepted: true, message: 'Vote recorded' };
   }
 
-  async getResults(resultsToken: string): Promise<PollResultsResponse> {
-    this.ensureOpaqueToken(resultsToken);
+  async getResults(shareToken: string): Promise<PollResultsResponse> {
+    this.ensureOpaqueToken(shareToken);
     const result = await this.repository.findResults(
-      hashSecret(resultsToken, this.config.tokenHashSecret),
+      hashSecret(shareToken, this.config.tokenHashSecret),
     );
     if (!result) {
       throw this.notFound();
@@ -190,6 +259,18 @@ export class PollService {
     if (!isOpaqueToken(token)) {
       throw this.notFound();
     }
+  }
+
+  private toSnapshotOptions(items: readonly CatalogItem[]) {
+    return items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      excerpt: item.excerpt,
+      tags: item.tags,
+      featureImage: item.featureImage,
+      featureImageAlt: item.featureImageAlt,
+      sourceUrl: item.url,
+    }));
   }
 
   private notFound(): NotFoundException {
