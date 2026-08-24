@@ -918,20 +918,22 @@
 
   .selected-slips {
     display: flex;
+    flex-wrap: wrap;
+    align-content: start;
     gap: 9px;
     margin-top: 18px;
-    min-width: 0;
-    padding-bottom: 6px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior-x: contain;
+    max-height: 174px;
+    padding-right: 5px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
     scrollbar-color: var(--citrus) transparent;
     scrollbar-width: thin;
     -webkit-overflow-scrolling: touch;
   }
 
   .selected-slips::-webkit-scrollbar {
-    height: 7px;
+    width: 7px;
   }
 
   .selected-slips::-webkit-scrollbar-thumb {
@@ -942,7 +944,6 @@
   .selected-slip {
     position: relative;
     display: grid;
-    flex: 0 0 128px;
     grid-template-columns: 32px 1fr;
     align-items: center;
     width: 128px;
@@ -1382,10 +1383,6 @@
     .mobile-action-strip button:disabled {
       background: var(--paper-dim);
       color: var(--ink-soft);
-    }
-
-    .selected-slips {
-      margin-right: -18px;
     }
 
     .dock-form {
