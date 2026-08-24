@@ -100,12 +100,15 @@ services:
     build:
       context: ..
       dockerfile: apps/backend/Dockerfile
+    entrypoint:
+      - dumb-init
+      - --
+      - /app/node_modules/.bin/prisma
     command:
-      - sh
-      - -c
-      - |
-        cd /app/apps/backend
-        ../../node_modules/.bin/prisma migrate deploy --config prisma.config.ts
+      - migrate
+      - deploy
+      - --config
+      - /app/apps/backend/prisma.config.ts
     networks:
       - backend
     env_file:
