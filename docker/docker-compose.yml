@@ -56,6 +56,7 @@ services:
     networks:
       - backend
       - traefik
+      - mello-ghost
       - default
     env_file:
       - .env
@@ -156,7 +157,7 @@ services:
       - -c
       - wal_compression=lz4
     volumes:
-      - ${DATA_ROOT:-/home/shared/docker-data/mellocracia}/postgres:/var/lib/postgresql/data
+      - ${DATA_ROOT:-/home/shared/docker-data/mellocracia}/postgres:/var/lib/postgresql
     networks:
       - backend
     healthcheck:
@@ -202,4 +203,6 @@ networks:
   backend:
     internal: true
   traefik:
+    external: true
+  mello-ghost:
     external: true
