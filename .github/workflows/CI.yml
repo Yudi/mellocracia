@@ -42,6 +42,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Generate Prisma Client
+        run: bun run prisma:generate
+
       - name: Check formatting
         run: bun x nx format:check
 

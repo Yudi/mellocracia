@@ -252,7 +252,7 @@
     {/if}
     <div class="success-footer">
       <span
-        >{createdPoll.optionCount} opções incluídas · expira em {formatDate(
+        >{createdPoll.optionCount} opções incluídas - expira em {formatDate(
           createdPoll.expiresAt,
         )}</span
       >
@@ -319,7 +319,7 @@
             {items.length === 1
               ? 'jogo no catálogo'
               : 'jogos no catálogo'}{query
-              ? ` · ${filteredItems.length} visíveis`
+              ? ` - ${filteredItems.length} visíveis`
               : ''}
           </p>
         </div>
@@ -452,7 +452,7 @@
         </div>
         {#if selectedItems.length > 0}
           <div class="selected-slips" aria-label="Jogos escolhidos">
-            {#each selectedItems.slice(0, 8) as item (item.id)}
+            {#each selectedItems as item (item.id)}
               <button
                 class="selected-slip"
                 type="button"
@@ -473,9 +473,6 @@
                 >
               </button>
             {/each}
-            {#if selectedItems.length > 8}<span class="more-slips"
-                >+ {selectedItems.length - 8} outros</span
-              >{/if}
           </div>
         {:else}
           <p class="dock-empty">
@@ -921,14 +918,31 @@
 
   .selected-slips {
     display: flex;
-    flex-wrap: wrap;
     gap: 9px;
     margin-top: 18px;
+    min-width: 0;
+    padding-bottom: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-color: var(--citrus) transparent;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .selected-slips::-webkit-scrollbar {
+    height: 7px;
+  }
+
+  .selected-slips::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background: var(--citrus);
   }
 
   .selected-slip {
     position: relative;
     display: grid;
+    flex: 0 0 128px;
     grid-template-columns: 32px 1fr;
     align-items: center;
     width: 128px;
@@ -985,12 +999,6 @@
     height: 17px;
     border-radius: 50%;
     background: white;
-  }
-
-  .more-slips {
-    align-self: center;
-    font-family: var(--font-display);
-    font-weight: 800;
   }
 
   .dock-form {
@@ -1377,11 +1385,7 @@
     }
 
     .selected-slips {
-      flex-wrap: nowrap;
       margin-right: -18px;
-      padding-bottom: 3px;
-      overflow-x: auto;
-      scrollbar-color: var(--citrus) transparent;
     }
 
     .dock-form {

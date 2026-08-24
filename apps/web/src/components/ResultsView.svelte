@@ -3,7 +3,12 @@
   import type { PollResultsResponse } from '@mellocracia/contracts';
   import Icon from './Icon.svelte';
   import TallyMark from './TallyMark.svelte';
-  import { api, ApiClientError, describeApiError, isExpiredError } from '../lib/api';
+  import {
+    api,
+    ApiClientError,
+    describeApiError,
+    isExpiredError,
+  } from '../lib/api';
 
   export let token: string;
 
@@ -13,7 +18,12 @@
   let expired = false;
 
   $: rankedOptions = results
-    ? [...results.options].sort((left, right) => right.votes - left.votes || right.percentage - left.percentage || left.title.localeCompare(right.title, 'pt-BR'))
+    ? [...results.options].sort(
+        (left, right) =>
+          right.votes - left.votes ||
+          right.percentage - left.percentage ||
+          left.title.localeCompare(right.title, 'pt-BR'),
+      )
     : [];
 
   onMount(() => {
@@ -28,64 +38,138 @@
     try {
       results = await api.getResults(token);
     } catch (error) {
-      errorMessage = describeApiError(error, 'Os resultados não puderam ser carregados agora.');
-      expired = isExpiredError(error) || (error instanceof ApiClientError && error.status === 410);
+      errorMessage = describeApiError(
+        error,
+        'Os resultados não puderam ser carregados agora.',
+      );
+      expired =
+        isExpiredError(error) ||
+        (error instanceof ApiClientError && error.status === 410);
     } finally {
       loading = false;
     }
   }
 
   function formatDate(value: string): string {
-    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+    return new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }).format(new Date(value));
   }
 
   function percentage(value: number): string {
-    return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(value);
+    return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(
+      value,
+    );
   }
 </script>
 
 {#if loading}
-  <div class="loading-state results-loading" aria-live="polite"><div><div class="loading-mark" aria-hidden="true"></div><p>Contando os votos…</p></div></div>
+  <div class="loading-state results-loading" aria-live="polite">
+    <div>
+      <div class="loading-mark" aria-hidden="true"></div>
+      <p>Contando os votos…</p>
+    </div>
+  </div>
 {:else if errorMessage}
   <section class="state-panel" aria-labelledby="results-error-title">
-    <span class="state-mark error-mark" aria-hidden="true"><Icon name={expired ? 'clock' : 'x'} size={27} /></span>
-    <h1 id="results-error-title" class="display-title">{expired ? 'Esta votação já foi recolhida.' : 'Não deu para abrir os resultados.'}</h1>
+    <span class="state-mark error-mark" aria-hidden="true"
+      ><Icon name={expired ? 'clock' : 'x'} size={27} /></span
+    >
+    <h1 id="results-error-title" class="display-title">
+      {expired
+        ? 'Esta votação já foi recolhida.'
+        : 'Não deu para abrir os resultados.'}
+    </h1>
     <p>{expired ? 'O prazo desta votação terminou.' : errorMessage}</p>
-    {#if !expired}<button class="button cobalt" type="button" onclick={loadResults}>Tentar novamente <Icon name="refresh" size={18} /></button>{/if}
+    {#if !expired}<button
+        class="button cobalt"
+        type="button"
+        onclick={loadResults}
+        >Tentar novamente <Icon name="refresh" size={18} /></button
+      >{/if}
   </section>
 {:else if results}
   <section class="results-shell" aria-labelledby="results-title">
     <div class="results-heading">
       <div>
         <h1 id="results-title" class="display-title">{results.title}</h1>
-        <p class="results-meta">{results.totalVotes} {results.totalVotes === 1 ? 'voto contado' : 'votos contados'} · esta cédula expira em {formatDate(results.expiresAt)}</p>
+        <p class="results-meta">
+          {results.totalVotes}
+          {results.totalVotes === 1 ? 'voto contado' : 'votos contados'} - esta cédula
+          expira em {formatDate(results.expiresAt)}
+        </p>
       </div>
-      <button class="button small" type="button" onclick={loadResults} disabled={loading}><Icon name="refresh" size={17} /> Atualizar</button>
+      <button
+        class="button small"
+        type="button"
+        onclick={loadResults}
+        disabled={loading}><Icon name="refresh" size={17} /> Atualizar</button
+      >
     </div>
 
     {#if results.totalVotes === 0}
-      <div class="empty-tally"><span class="tally-dash" aria-hidden="true"></span><h2>Ainda não há votos.</h2><p>Compartilhe o link de votação e volte aqui para acompanhar a mesa.</p></div>
+      <div class="empty-tally">
+        <span class="tally-dash" aria-hidden="true"></span>
+        <h2>Ainda não há votos.</h2>
+        <p>
+          Compartilhe o link de votação e volte aqui para acompanhar a mesa.
+        </p>
+      </div>
     {:else}
       <ol class="tally-list" aria-label="Resultados por jogo">
         {#each rankedOptions as option, index (option.id)}
           <li class="tally-row">
             <div class="tally-cover">
-              {#if option.featureImage}<img src={option.featureImage} alt="" loading="lazy" referrerpolicy="no-referrer" />{:else}<span class="cover-fallback" aria-hidden="true">{option.title.slice(0, 1)}</span>{/if}
+              {#if option.featureImage}<img
+                  src={option.featureImage}
+                  alt=""
+                  loading="lazy"
+                  referrerpolicy="no-referrer"
+                />{:else}<span class="cover-fallback" aria-hidden="true"
+                  >{option.title.slice(0, 1)}</span
+                >{/if}
             </div>
             <div class="tally-main">
               <div class="tally-label-row">
-                <span class="tally-position"><TallyMark size={24} /><span>{String(index + 1).padStart(2, '0')}</span></span>
-                <span class="tally-title"><strong>{option.title}</strong>{#if option.sourceUrl}<a class="tally-source" href={option.sourceUrl} target="_blank" rel="noreferrer" aria-label={`Abrir ${option.title} no Mello Games em uma nova aba`}>Abrir post <Icon name="external" size={14} /></a>{/if}</span>
-                <span class="tally-number">{option.votes} {option.votes === 1 ? 'voto' : 'votos'} · {percentage(option.percentage)}%</span>
+                <span class="tally-position"
+                  ><TallyMark size={24} /><span
+                    >{String(index + 1).padStart(2, '0')}</span
+                  ></span
+                >
+                <span class="tally-title"
+                  ><strong>{option.title}</strong>{#if option.sourceUrl}<a
+                      class="tally-source"
+                      href={option.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Abrir ${option.title} no Mello Games em uma nova aba`}
+                      >Abrir post <Icon name="external" size={14} /></a
+                    >{/if}</span
+                >
+                <span class="tally-number"
+                  >{option.votes}
+                  {option.votes === 1 ? 'voto' : 'votos'} - {percentage(
+                    option.percentage,
+                  )}%</span
+                >
               </div>
-              <div class="tally-track" aria-hidden="true"><span style={`--tally-scale: ${Math.max(0, Math.min(100, option.percentage)) / 100}`}></span></div>
+              <div class="tally-track" aria-hidden="true">
+                <span
+                  style={`--tally-scale: ${Math.max(0, Math.min(100, option.percentage)) / 100}`}
+                ></span>
+              </div>
             </div>
           </li>
         {/each}
       </ol>
     {/if}
 
-    <div class="results-footer"><span>Este link mostra apenas os resultados.</span><a href="/">Criar outra votação <Icon name="arrow-right" size={16} /></a></div>
+    <div class="results-footer">
+      <span>Este link mostra apenas os resultados.</span><a href="/"
+        >Criar outra votação <Icon name="arrow-right" size={16} /></a
+      >
+    </div>
   </section>
 {/if}
 

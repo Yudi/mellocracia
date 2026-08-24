@@ -21,7 +21,7 @@ const {
 const siteUrl = Astro.site ?? new URL(Astro.url.origin);
 const canonicalUrl = canonicalPath ? new URL(canonicalPath, siteUrl).toString() : Astro.url.toString();
 const socialImageUrl = new URL(socialImagePath, siteUrl).toString();
-const fullTitle = `${title} · Mellocracia`;
+const fullTitle = `${title} - Mellocracia`;
 ---
 
 <!doctype html>
@@ -65,13 +65,17 @@ const fullTitle = `${title} · Mellocracia`;
   <body>
     <header class="site-header">
       <a class="wordmark" href="/" aria-label="Mellocracia, início">MELLOCRACIA</a>
-      <a class="header-help" href="https://mello.yudi.com.br/" target="_blank" rel="noreferrer">Mello Games <Icon name="external" size={15} /></a>
+      <a class="header-help" href="https://mello.yudi.com.br/" target="_blank" rel="noreferrer"
+        >Mello Games <Icon name="external" size={15} /></a
+      >
     </header>
     <main class="page-shell">
       <slot />
     </main>
     <footer class="site-footer">
-      <a href="https://mello.yudi.com.br/" target="_blank" rel="noreferrer">Conteúdo por Mello Games <Icon name="external" size={14} /></a>
+      <a href="https://mello.yudi.com.br/" target="_blank" rel="noreferrer"
+        >Conteúdo por Mello Games <Icon name="external" size={14} /></a
+      >
     </footer>
   </body>
 </html>

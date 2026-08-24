@@ -100,7 +100,12 @@ services:
     build:
       context: ..
       dockerfile: apps/backend/Dockerfile
-    command: ['./node_modules/.bin/prisma', 'migrate', 'deploy']
+    command:
+      - sh
+      - -c
+      - |
+        cd /app/apps/backend
+        ../../node_modules/.bin/prisma migrate deploy --config prisma.config.ts
     networks:
       - backend
     env_file:
@@ -123,6 +128,30 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-mellocracia}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       POSTGRES_DB: ${POSTGRES_DB:-mellocracia}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=768MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - wal_buffers=8MB
+      - -c
+      - random_page_cost=4
+      - -c
+      - effective_io_concurrency=2
+      - -c
+      - huge_pages=off
+      - -c
+      - jit=off
+      - -c
+      - wal_compression=lz4
     volumes:
       - ${DATA_ROOT:-/home/shared/docker-data/mellocracia}/postgres:/var/lib/postgresql/data
     networks:

@@ -12,8 +12,8 @@
   "scripts": {
     "format:check": "nx format:check",
     "lint": "nx run-many --target=lint --all --parallel=3",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:generate": "prisma generate --schema apps/backend/prisma/schema.prisma",
+    "prisma:migrate:deploy": "prisma migrate deploy --config apps/backend/prisma.config.ts",
     "test": "bun run prisma:generate && bun test apps/backend/test",
     "typecheck": "bun run prisma:generate && tsc --noEmit -p apps/backend/tsconfig.app.json && tsc --noEmit -p apps/web/tsconfig.json && tsc --noEmit -p libs/contracts/tsconfig.json",
     "build": "nx run-many --target=build --projects=backend,web --parallel=1"
@@ -29,6 +29,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
+    "dotenv": "^16.4.7",
     "express": "^5.2.1",
     "helmet": "^8.3.0",
     "pg": "^8.23.0",
