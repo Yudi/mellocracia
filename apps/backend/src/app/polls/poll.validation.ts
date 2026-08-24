@@ -52,3 +52,31 @@ export function validatePollCreationInput(
   }
   return { title, durationHours, optionPostIds: ids };
 }
+
+export function validateVoteOptionIds(
+  optionIds: unknown,
+  maxOptions: number,
+): string[] {
+  if (
+    !Array.isArray(optionIds) ||
+    optionIds.length === 0 ||
+    optionIds.length > maxOptions ||
+    optionIds.some(
+      (id) => typeof id !== 'string' || id.length === 0 || id.length > 256,
+    )
+  ) {
+    throw new BadRequestException({
+      code: 'INVALID_OPTIONS',
+      message: 'Choose at least one valid option',
+    });
+  }
+
+  const ids = optionIds as string[];
+  if (new Set(ids).size !== ids.length) {
+    throw new BadRequestException({
+      code: 'DUPLICATE_OPTIONS',
+      message: 'Each option can only be selected once',
+    });
+  }
+  return ids;
+}

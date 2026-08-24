@@ -9,7 +9,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-function createService(): CatalogService {
+function createService(ghostMaxPosts = 100): CatalogService {
   const config = {
     ghostContentApiKey: 'content-api-key',
     ghostContentApiUrl: 'https://ghost.example/ghost/api/content',
@@ -17,7 +17,7 @@ function createService(): CatalogService {
     ghostCacheTtlSeconds: 300,
     ghostFetchTimeoutMs: 1_000,
     ghostFetchAttempts: 2,
-    ghostMaxPosts: 100,
+    ghostMaxPosts,
   } as AppConfig;
   const redis = {
     get: async () => null,
@@ -79,5 +79,52 @@ describe('CatalogService', () => {
       stale: false,
     });
     expect(calls).toBe(2);
+  });
+
+  test('fetches public tags and keeps a catalog snapshot stable across a shifting page boundary', async () => {
+    const requestedUrls: URL[] = [];
+    globalThis.fetch = (async (input) => {
+      const url = new URL(String(input));
+      requestedUrls.push(url);
+      const page = url.searchParams.get('page');
+      return Response.json(
+        page === '1'
+          ? {
+              posts: [
+                { id: 'post-a', title: 'A', tags: [{ name: 'Estratégia' }] },
+                {
+                  id: 'post-b',
+                  title: 'B',
+                  tags: [{ name: '#interno', visibility: 'internal' }],
+                },
+              ],
+              meta: { pagination: { pages: 2, next: 2 } },
+            }
+          : {
+              // A post published during an offset-paginated fetch can make
+              // the last item on the prior page reappear here.
+              posts: [
+                { id: 'post-b', title: 'B' },
+                { id: 'post-c', title: 'C', tags: [{ name: 'Família' }] },
+              ],
+              meta: { pagination: { pages: 2, next: null } },
+            },
+      );
+    }) as typeof globalThis.fetch;
+
+    const catalog = await createService(200).getCatalog();
+
+    expect(catalog.items.map((item) => item.id)).toEqual([
+      'post-a',
+      'post-b',
+      'post-c',
+    ]);
+    expect(catalog.items[0].tags).toEqual(['Estratégia']);
+    expect(catalog.items[1].tags).toEqual([]);
+    expect(requestedUrls).toHaveLength(2);
+    expect(requestedUrls[0].searchParams.get('include')).toBe('tags');
+    expect(requestedUrls[0].searchParams.get('filter')).toMatch(
+      /^published_at:<='/,
+    );
   });
 });

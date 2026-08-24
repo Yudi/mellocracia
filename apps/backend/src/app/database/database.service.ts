@@ -4,64 +4,40 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import { AppConfig } from '../config/app-config';
+import { PrismaClient } from '../../generated/prisma/client';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
-  private pool?: Pool;
+  readonly prisma: PrismaClient;
 
-  constructor(private readonly config: AppConfig) {}
+  constructor(config: AppConfig) {
+    const pool = new Pool({
+      connectionString: config.databaseUrl,
+      max: config.databasePoolMax,
+      connectionTimeoutMillis: config.databaseConnectionTimeoutMs,
+      statement_timeout: config.databaseStatementTimeoutMs,
+    });
+    const adapter = new PrismaPg(pool, {
+      disposeExternalPool: true,
+      onPoolError: (error) =>
+        this.logger.error(`PostgreSQL pool error: ${error.message}`),
+    });
+    this.prisma = new PrismaClient({ adapter });
+  }
 
   async onModuleInit(): Promise<void> {
-    this.pool = new Pool({
-      connectionString: this.config.databaseUrl,
-      max: this.config.databasePoolMax,
-      connectionTimeoutMillis: this.config.databaseConnectionTimeoutMs,
-      statement_timeout: this.config.databaseStatementTimeoutMs,
-    });
-    this.pool.on('error', (error) =>
-      this.logger.error(`PostgreSQL pool error: ${error.message}`),
-    );
+    await this.prisma.$connect();
   }
 
   async onModuleDestroy(): Promise<void> {
-    await this.pool?.end();
-  }
-
-  private getPool(): Pool {
-    if (!this.pool) {
-      throw new Error('Database pool is not initialized');
-    }
-    return this.pool;
-  }
-
-  query<T extends QueryResultRow = QueryResultRow>(
-    text: string,
-    values?: unknown[],
-  ): Promise<QueryResult<T>> {
-    return this.getPool().query<T>(text, values);
-  }
-
-  async withTransaction<T>(
-    callback: (client: PoolClient) => Promise<T>,
-  ): Promise<T> {
-    const client = await this.getPool().connect();
-    try {
-      await client.query('BEGIN');
-      const result = await callback(client);
-      await client.query('COMMIT');
-      return result;
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      throw error;
-    } finally {
-      client.release();
-    }
+    await this.prisma.$disconnect();
   }
 
   async ping(): Promise<void> {
-    await this.getPool().query('SELECT 1');
+    await this.prisma.poll.count({ take: 0 });
   }
 }

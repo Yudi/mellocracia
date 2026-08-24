@@ -100,7 +100,7 @@ services:
     build:
       context: ..
       dockerfile: apps/backend/Dockerfile
-    command: ['node', 'main.js', '--migrate']
+    command: ['./node_modules/.bin/prisma', 'migrate', 'deploy']
     networks:
       - backend
     env_file:

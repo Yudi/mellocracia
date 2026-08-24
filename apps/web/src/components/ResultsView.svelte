@@ -73,7 +73,11 @@
               {#if option.featureImage}<img src={option.featureImage} alt="" loading="lazy" referrerpolicy="no-referrer" />{:else}<span class="cover-fallback" aria-hidden="true">{option.title.slice(0, 1)}</span>{/if}
             </div>
             <div class="tally-main">
-              <div class="tally-label-row"><span class="tally-position"><TallyMark size={24} /><span>{String(index + 1).padStart(2, '0')}</span></span><strong>{option.title}</strong><span class="tally-number">{option.votes} {option.votes === 1 ? 'voto' : 'votos'} · {percentage(option.percentage)}%</span></div>
+              <div class="tally-label-row">
+                <span class="tally-position"><TallyMark size={24} /><span>{String(index + 1).padStart(2, '0')}</span></span>
+                <span class="tally-title"><strong>{option.title}</strong>{#if option.sourceUrl}<a class="tally-source" href={option.sourceUrl} target="_blank" rel="noreferrer" aria-label={`Abrir ${option.title} no Mello Games em uma nova aba`}>Abrir post <Icon name="external" size={14} /></a>{/if}</span>
+                <span class="tally-number">{option.votes} {option.votes === 1 ? 'voto' : 'votos'} · {percentage(option.percentage)}%</span>
+              </div>
               <div class="tally-track" aria-hidden="true"><span style={`--tally-scale: ${Math.max(0, Math.min(100, option.percentage)) / 100}`}></span></div>
             </div>
           </li>
@@ -245,6 +249,36 @@
     line-height: 1;
   }
 
+  .tally-title {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .tally-title strong {
+    min-width: 0;
+  }
+
+  .tally-source {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+    color: var(--ink-soft);
+    font-family: var(--font-display);
+    font-size: 0.94rem;
+    font-weight: 800;
+    line-height: 1;
+    text-decoration: none;
+    text-underline-offset: 3px;
+  }
+
+  .tally-source:hover {
+    color: var(--cobalt);
+    text-decoration: underline;
+  }
+
   .tally-number {
     color: var(--ink-soft);
     font-size: 0.82rem;
@@ -317,6 +351,11 @@
 
     .tally-label-row strong {
       font-size: 1.2rem;
+    }
+
+    .tally-title {
+      flex-wrap: wrap;
+      gap: 6px 9px;
     }
 
     .tally-number {

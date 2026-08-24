@@ -12,6 +12,12 @@ interface GhostPost {
   feature_image_alt?: unknown;
   published_at?: unknown;
   url?: unknown;
+  tags?: unknown;
+}
+
+interface GhostTag {
+  name?: unknown;
+  visibility?: unknown;
 }
 
 interface GhostResponse {
@@ -29,8 +35,8 @@ interface CachedCatalog {
   fetchedAt: string;
 }
 
-const CATALOG_CURRENT_KEY = 'mellocracia:catalog:current:v1';
-const CATALOG_STALE_KEY = 'mellocracia:catalog:stale:v1';
+const CATALOG_CURRENT_KEY = 'mellocracia:catalog:current:v2';
+const CATALOG_STALE_KEY = 'mellocracia:catalog:stale:v2';
 const CATALOG_STALE_TTL_SECONDS = 24 * 60 * 60;
 const GHOST_PAGE_SIZE = 100;
 const GHOST_FETCH_MAX_TIMEOUT_MS = 60_000;
@@ -114,16 +120,21 @@ export class CatalogService {
     }
 
     const items: CatalogItem[] = [];
+    const seenPostIds = new Set<string>();
     const maxPages = Math.ceil(this.config.ghostMaxPosts / GHOST_PAGE_SIZE);
     const fields =
       'id,slug,title,excerpt,feature_image,feature_image_alt,published_at,url';
+    // Page-based Ghost pagination can shift while this loop is running if a
+    // post is published. The upper bound freezes this catalog snapshot, while
+    // the ID set protects against any overlap at page boundaries.
+    const publishedBefore = new Date().toISOString();
 
     for (
       let page = 1;
       page <= maxPages && items.length < this.config.ghostMaxPosts;
       page += 1
     ) {
-      const url = this.buildGhostPostsUrl(page, fields);
+      const url = this.buildGhostPostsUrl(page, fields, publishedBefore);
       const response = await this.fetchWithRetry(url);
       if (!response.ok) {
         throw new Error(`Ghost API returned HTTP ${response.status}`);
@@ -131,12 +142,17 @@ export class CatalogService {
 
       const payload = (await response.json()) as GhostResponse;
       const posts = Array.isArray(payload.posts) ? payload.posts : [];
-      const normalized = posts
-        .map((post) => this.normalizePost(post))
-        .filter((post): post is CatalogItem => post !== undefined);
-      items.push(
-        ...normalized.slice(0, this.config.ghostMaxPosts - items.length),
-      );
+      for (const post of posts) {
+        const normalized = this.normalizePost(post);
+        if (!normalized || seenPostIds.has(normalized.id)) {
+          continue;
+        }
+        seenPostIds.add(normalized.id);
+        items.push(normalized);
+        if (items.length >= this.config.ghostMaxPosts) {
+          break;
+        }
+      }
 
       const pagination = payload.meta?.pagination;
       const totalPages = Number(pagination?.pages);
@@ -155,7 +171,11 @@ export class CatalogService {
     return { items, fetchedAt: new Date().toISOString() };
   }
 
-  private buildGhostPostsUrl(page: number, fields: string): string {
+  private buildGhostPostsUrl(
+    page: number,
+    fields: string,
+    publishedBefore: string,
+  ): string {
     const base = this.config.ghostContentApiUrl.endsWith('/posts')
       ? this.config.ghostContentApiUrl
       : `${this.config.ghostContentApiUrl}/posts`;
@@ -164,6 +184,8 @@ export class CatalogService {
     url.searchParams.set('limit', String(GHOST_PAGE_SIZE));
     url.searchParams.set('page', String(page));
     url.searchParams.set('fields', fields);
+    url.searchParams.set('include', 'tags');
+    url.searchParams.set('filter', `published_at:<='${publishedBefore}'`);
     url.searchParams.set('order', 'published_at desc');
     return url.toString();
   }
@@ -257,6 +279,7 @@ export class CatalogService {
       slug: this.stringValue(post.slug),
       title: post.title,
       excerpt: this.stringValue(post.excerpt),
+      tags: this.normalizeTags(post.tags),
       featureImage: this.stringOrNull(post.feature_image),
       featureImageAlt: this.stringOrNull(post.feature_image_alt),
       publishedAt: this.stringValue(post.published_at),
@@ -270,6 +293,24 @@ export class CatalogService {
 
   private stringOrNull(value: unknown): string | null {
     return typeof value === 'string' && value.length > 0 ? value : null;
+  }
+
+  private normalizeTags(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    const names = value.flatMap((tag) => {
+      if (!tag || typeof tag !== 'object') {
+        return [];
+      }
+      const { name, visibility } = tag as GhostTag;
+      if (visibility === 'internal' || typeof name !== 'string') {
+        return [];
+      }
+      const normalized = name.trim();
+      return normalized ? [normalized] : [];
+    });
+    return [...new Set(names)];
   }
 
   private async readRedisCache(
@@ -337,6 +378,8 @@ export class CatalogService {
       typeof item.title === 'string' &&
       item.title.length > 0 &&
       typeof item.excerpt === 'string' &&
+      Array.isArray(item.tags) &&
+      item.tags.every((tag) => typeof tag === 'string') &&
       (item.featureImage === null || typeof item.featureImage === 'string') &&
       (item.featureImageAlt === null ||
         typeof item.featureImageAlt === 'string') &&

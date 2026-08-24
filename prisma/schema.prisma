@@ -1,0 +1,58 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../apps/backend/src/generated/prisma"
+  engineType   = "client"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Poll {
+  id               String       @id @db.Text
+  title            String       @db.Text
+  shareTokenHash   String       @unique @map("share_token_hash") @db.Text
+  resultsTokenHash String       @unique @map("results_token_hash") @db.Text
+  expiresAt        DateTime     @map("expires_at") @db.Timestamptz(6)
+  totalVotes       Int          @default(0) @map("total_votes")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  options          PollOption[]
+  votes            PollVote[]
+
+  @@index([expiresAt], map: "polls_expires_at_idx")
+  @@map("polls")
+}
+
+model PollOption {
+  pollId          String      @map("poll_id") @db.Text
+  postId          String      @map("post_id") @db.Text
+  title           String      @db.Text
+  excerpt         String      @default("") @db.Text
+  tags            String[]    @default([]) @db.Text
+  featureImage    String?     @map("feature_image") @db.Text
+  featureImageAlt String?     @map("feature_image_alt") @db.Text
+  sourceUrl       String      @map("source_url") @db.Text
+  position        Int
+  voteCount       Int         @default(0) @map("vote_count")
+  poll            Poll        @relation(fields: [pollId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  votes           PollVote[]
+
+  @@id([pollId, postId])
+  @@unique([pollId, position])
+  @@index([pollId], map: "poll_options_poll_id_idx")
+  @@map("poll_options")
+}
+
+model PollVote {
+  pollId         String     @map("poll_id") @db.Text
+  voterNonceHash String     @map("voter_nonce_hash") @db.Text
+  optionPostId   String     @map("option_post_id") @db.Text
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  poll           Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  option         PollOption @relation(fields: [pollId, optionPostId], references: [pollId, postId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([pollId, voterNonceHash, optionPostId])
+  @@index([pollId], map: "poll_votes_poll_id_idx")
+  @@map("poll_votes")
+}

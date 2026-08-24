@@ -12,6 +12,7 @@ export interface CatalogItem {
   slug: string;
   title: string;
   excerpt: string;
+  tags: string[];
   featureImage: string | null;
   featureImageAlt: string | null;
   publishedAt: string;
@@ -42,6 +43,7 @@ export interface PollOption {
   id: string;
   title: string;
   excerpt: string;
+  tags: string[];
   featureImage: string | null;
   featureImageAlt: string | null;
   sourceUrl: string;
@@ -54,7 +56,7 @@ export interface PollResponse {
 }
 
 export interface CastVoteRequest {
-  optionId: string;
+  optionIds: string[];
   turnstileToken?: string;
 }
 

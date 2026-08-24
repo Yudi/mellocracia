@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { validatePollCreationInput } from '../src/app/polls/poll.validation';
+import {
+  validatePollCreationInput,
+  validateVoteOptionIds,
+} from '../src/app/polls/poll.validation';
 
 describe('poll creation validation', () => {
   test('normalizes a valid title and accepts more than sixteen choices', () => {
@@ -29,5 +32,18 @@ describe('poll creation validation', () => {
     expect(() =>
       validatePollCreationInput('Poll', 1, ['a', 'b', 'c'], 2),
     ).toThrow();
+  });
+
+  test('accepts several distinct options in one ballot', () => {
+    expect(validateVoteOptionIds(['post-a', 'post-b'], 1_000)).toEqual([
+      'post-a',
+      'post-b',
+    ]);
+  });
+
+  test('rejects empty, duplicate, and oversized ballot selections', () => {
+    expect(() => validateVoteOptionIds([], 1_000)).toThrow();
+    expect(() => validateVoteOptionIds(['post-a', 'post-a'], 1_000)).toThrow();
+    expect(() => validateVoteOptionIds(['post-a', 'post-b'], 1)).toThrow();
   });
 });

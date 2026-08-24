@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PollOption, PollResultOption } from '@mellocracia/contracts';
 import { DatabaseService } from '../database/database.service';
+import { Prisma } from '../../generated/prisma/client';
 
 export interface PollSnapshotOption {
   id: string;
   title: string;
   excerpt: string;
+  tags: string[];
   featureImage: string | null;
   featureImageAlt: string | null;
   sourceUrl: string;
@@ -17,6 +19,7 @@ export interface PollRecord {
   id: string;
   title: string;
   expiresAt: Date;
+  totalVotes: number;
   options: PollSnapshotOption[];
 }
 
@@ -34,113 +37,76 @@ export class PollRepository {
   constructor(private readonly database: DatabaseService) {}
 
   async create(record: CreatePollRecord): Promise<void> {
-    await this.database.withTransaction(async (client) => {
-      await client.query(
-        `INSERT INTO polls (id, title, share_token_hash, results_token_hash, expires_at)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [
-          record.id,
-          record.title,
-          record.shareTokenHash,
-          record.resultsTokenHash,
-          record.expiresAt,
-        ],
-      );
-
-      if (record.options.length === 0) {
-        return;
-      }
-
-      const parameters: unknown[] = [];
-      const rows = record.options.map((option, position) => {
-        const firstParameter = parameters.length + 1;
-        parameters.push(
-          record.id,
-          option.id,
-          option.title,
-          option.excerpt,
-          option.featureImage,
-          option.featureImageAlt,
-          option.sourceUrl,
-          position,
-        );
-        return `(${Array.from({ length: 8 }, (_, offset) => `$${firstParameter + offset}`).join(', ')})`;
-      });
-      await client.query(
-        `INSERT INTO poll_options
-           (poll_id, post_id, title, excerpt, feature_image, feature_image_alt, source_url, position)
-         VALUES ${rows.join(', ')}`,
-        parameters,
-      );
+    await this.database.prisma.poll.create({
+      data: {
+        id: record.id,
+        title: record.title,
+        shareTokenHash: record.shareTokenHash,
+        resultsTokenHash: record.resultsTokenHash,
+        expiresAt: record.expiresAt,
+        options: {
+          create: record.options.map((option, position) => ({
+            postId: option.id,
+            title: option.title,
+            excerpt: option.excerpt,
+            tags: option.tags,
+            featureImage: option.featureImage,
+            featureImageAlt: option.featureImageAlt,
+            sourceUrl: option.sourceUrl,
+            position,
+          })),
+        },
+      },
     });
   }
 
   async findByShareTokenHash(
     shareTokenHash: string,
   ): Promise<PollRecord | undefined> {
-    return this.findByTokenHash('share_token_hash', shareTokenHash);
+    return this.findByTokenHash({ shareTokenHash });
   }
 
   async findByResultsTokenHash(
     resultsTokenHash: string,
   ): Promise<PollRecord | undefined> {
-    return this.findByTokenHash('results_token_hash', resultsTokenHash);
+    return this.findByTokenHash({ resultsTokenHash });
   }
 
-  private async findByTokenHash(
-    column: 'share_token_hash' | 'results_token_hash',
-    tokenHash: string,
-  ): Promise<PollRecord | undefined> {
-    const result = await this.database.query<{
-      poll_id: string;
-      title: string;
-      expires_at: Date;
-      post_id: string;
-      option_title: string;
-      excerpt: string;
-      feature_image: string | null;
-      feature_image_alt: string | null;
-      source_url: string;
-      position: number;
-      vote_count: number;
-    }>(
-      `SELECT p.id AS poll_id,
-              p.title,
-              p.expires_at,
-              o.post_id,
-              o.title AS option_title,
-              o.excerpt,
-              o.feature_image,
-              o.feature_image_alt,
-              o.source_url,
-              o.position,
-              o.vote_count
-         FROM polls p
-         JOIN poll_options o ON o.poll_id = p.id
-        WHERE p.${column} = $1
-          AND p.expires_at > CURRENT_TIMESTAMP
-        ORDER BY o.position ASC`,
-      [tokenHash],
-    );
+  private async findByTokenHash(token: {
+    shareTokenHash?: string;
+    resultsTokenHash?: string;
+  }): Promise<PollRecord | undefined> {
+    const poll = await this.database.prisma.poll.findFirst({
+      where: {
+        ...token,
+        expiresAt: { gt: new Date() },
+      },
+      include: {
+        options: {
+          orderBy: { position: 'asc' },
+        },
+      },
+    });
 
-    if (result.rowCount === 0) {
+    if (!poll || poll.options.length === 0) {
       return undefined;
     }
 
-    const first = result.rows[0];
     return {
-      id: first.poll_id,
-      title: first.title,
-      expiresAt: new Date(first.expires_at),
-      options: result.rows.map((row) => ({
-        id: row.post_id,
-        title: row.option_title,
-        excerpt: row.excerpt,
-        featureImage: row.feature_image,
-        featureImageAlt: row.feature_image_alt,
-        sourceUrl: row.source_url,
-        position: row.position,
-        votes: Number(row.vote_count),
+      id: poll.id,
+      title: poll.title,
+      expiresAt: poll.expiresAt,
+      totalVotes: poll.totalVotes,
+      options: poll.options.map((option) => ({
+        id: option.postId,
+        title: option.title,
+        excerpt: option.excerpt,
+        tags: option.tags,
+        featureImage: option.featureImage,
+        featureImageAlt: option.featureImageAlt,
+        sourceUrl: option.sourceUrl,
+        position: option.position,
+        votes: option.voteCount,
       })),
     };
   }
@@ -148,56 +114,31 @@ export class PollRepository {
   async castVote(
     pollId: string,
     voterNonceHash: string,
-    optionId: string,
+    optionIds: readonly string[],
     maxVotes: number,
   ): Promise<
     'accepted' | 'duplicate' | 'invalid-option' | 'expired' | 'capacity'
   > {
-    return this.database.withTransaction(async (client) => {
-      const poll = await client.query<{ id: string; total_votes: number }>(
-        `SELECT id, total_votes
-           FROM polls
-          WHERE id = $1 AND expires_at > CURRENT_TIMESTAMP
-          FOR UPDATE`,
-        [pollId],
-      );
-      if (poll.rowCount === 0) {
-        return 'expired';
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await this.castVoteAttempt(
+          pollId,
+          voterNonceHash,
+          optionIds,
+          maxVotes,
+        );
+      } catch (error) {
+        if (this.isPrismaError(error, 'P2002')) {
+          return 'duplicate';
+        }
+        if (this.isPrismaError(error, 'P2034') && attempt < 2) {
+          continue;
+        }
+        throw error;
       }
-      if (Number(poll.rows[0].total_votes) >= maxVotes) {
-        return 'capacity';
-      }
+    }
 
-      const option = await client.query<{ post_id: string }>(
-        `SELECT post_id FROM poll_options WHERE poll_id = $1 AND post_id = $2`,
-        [pollId, optionId],
-      );
-      if (option.rowCount === 0) {
-        return 'invalid-option';
-      }
-
-      const inserted = await client.query(
-        `INSERT INTO poll_votes (poll_id, voter_nonce_hash, option_post_id)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (poll_id, voter_nonce_hash) DO NOTHING
-         RETURNING poll_id`,
-        [pollId, voterNonceHash, optionId],
-      );
-      if (inserted.rowCount === 0) {
-        return 'duplicate';
-      }
-
-      await client.query(
-        `UPDATE poll_options SET vote_count = vote_count + 1
-          WHERE poll_id = $1 AND post_id = $2`,
-        [pollId, optionId],
-      );
-      await client.query(
-        'UPDATE polls SET total_votes = total_votes + 1 WHERE id = $1',
-        [pollId],
-      );
-      return 'accepted';
-    });
+    throw new Error('Vote transaction exhausted retries');
   }
 
   async findResults(resultsTokenHash: string): Promise<
@@ -213,10 +154,7 @@ export class PollRepository {
     if (!record) {
       return undefined;
     }
-    const totalVotes = record.options.reduce(
-      (total, option) => total + option.votes,
-      0,
-    );
+    const totalVotes = record.totalVotes;
     return {
       title: record.title,
       expiresAt: record.expiresAt,
@@ -225,6 +163,7 @@ export class PollRepository {
         id: option.id,
         title: option.title,
         excerpt: option.excerpt,
+        tags: option.tags,
         featureImage: option.featureImage,
         featureImageAlt: option.featureImageAlt,
         sourceUrl: option.sourceUrl,
@@ -238,17 +177,87 @@ export class PollRepository {
   }
 
   async deleteExpired(batchSize: number): Promise<number> {
-    const result = await this.database.query<{ id: string }>(
-      `DELETE FROM polls
-        WHERE id IN (
-          SELECT id FROM polls
-           WHERE expires_at <= CURRENT_TIMESTAMP
-           ORDER BY expires_at ASC
-           LIMIT $1
-        )
-      RETURNING id`,
-      [batchSize],
+    return this.database.prisma.$transaction(async (transaction) => {
+      const expired = await transaction.poll.findMany({
+        where: { expiresAt: { lte: new Date() } },
+        orderBy: { expiresAt: 'asc' },
+        take: batchSize,
+        select: { id: true },
+      });
+      if (expired.length === 0) {
+        return 0;
+      }
+      const result = await transaction.poll.deleteMany({
+        where: { id: { in: expired.map((poll) => poll.id) } },
+      });
+      return result.count;
+    });
+  }
+
+  private async castVoteAttempt(
+    pollId: string,
+    voterNonceHash: string,
+    optionIds: readonly string[],
+    maxVotes: number,
+  ): Promise<
+    'accepted' | 'duplicate' | 'invalid-option' | 'expired' | 'capacity'
+  > {
+    return this.database.prisma.$transaction(
+      async (transaction) => {
+        const poll = await transaction.poll.findFirst({
+          where: { id: pollId, expiresAt: { gt: new Date() } },
+          select: { totalVotes: true },
+        });
+        if (!poll) {
+          return 'expired';
+        }
+        if (poll.totalVotes >= maxVotes) {
+          return 'capacity';
+        }
+
+        const options = await transaction.pollOption.findMany({
+          where: { pollId, postId: { in: [...optionIds] } },
+          select: { postId: true },
+        });
+        if (options.length !== optionIds.length) {
+          return 'invalid-option';
+        }
+
+        const existingVote = await transaction.pollVote.findFirst({
+          where: { pollId, voterNonceHash },
+          select: { pollId: true },
+        });
+        if (existingVote) {
+          return 'duplicate';
+        }
+
+        await transaction.pollVote.createMany({
+          data: optionIds.map((optionPostId) => ({
+            pollId,
+            voterNonceHash,
+            optionPostId,
+          })),
+        });
+        await transaction.pollOption.updateMany({
+          where: { pollId, postId: { in: [...optionIds] } },
+          data: { voteCount: { increment: 1 } },
+        });
+        await transaction.poll.update({
+          where: { id: pollId },
+          data: { totalVotes: { increment: 1 } },
+        });
+        return 'accepted';
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
-    return result.rowCount ?? 0;
+  }
+
+  private isPrismaError(error: unknown, code: string): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === code
+    );
   }
 }

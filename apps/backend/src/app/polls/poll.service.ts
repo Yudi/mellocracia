@@ -16,7 +16,10 @@ import { randomUUID } from 'node:crypto';
 import { AppConfig } from '../config/app-config';
 import { CatalogService } from '../catalog/catalog.service';
 import { PollRepository } from './poll.repository';
-import { validatePollCreationInput } from './poll.validation';
+import {
+  validatePollCreationInput,
+  validateVoteOptionIds,
+} from './poll.validation';
 import {
   createOpaqueToken,
   cryptographicallyShuffle,
@@ -75,6 +78,7 @@ export class PollService {
         id: item.id,
         title: item.title,
         excerpt: item.excerpt,
+        tags: item.tags,
         featureImage: item.featureImage,
         featureImageAlt: item.featureImageAlt,
         sourceUrl: item.url,
@@ -104,6 +108,7 @@ export class PollService {
         id: option.id,
         title: option.title,
         excerpt: option.excerpt,
+        tags: option.tags,
         featureImage: option.featureImage,
         featureImageAlt: option.featureImageAlt,
         sourceUrl: option.sourceUrl,
@@ -113,7 +118,7 @@ export class PollService {
 
   async castVote(
     shareToken: string,
-    optionId: string,
+    optionIds: unknown,
     voterNonce: string | undefined,
     ipHash: string,
     turnstileToken?: string,
@@ -131,16 +136,10 @@ export class PollService {
         message: 'Open the poll before voting',
       });
     }
-    if (
-      typeof optionId !== 'string' ||
-      optionId.length === 0 ||
-      optionId.length > 256
-    ) {
-      throw new BadRequestException({
-        code: 'INVALID_OPTION',
-        message: 'Choose a valid option',
-      });
-    }
+    const validatedOptionIds = validateVoteOptionIds(
+      optionIds,
+      this.config.maxPollOptions,
+    );
 
     await this.turnstile.verify(turnstileToken);
     const record = await this.repository.findByShareTokenHash(tokenHash);
@@ -150,7 +149,7 @@ export class PollService {
     const result = await this.repository.castVote(
       record.id,
       hashSecret(voterNonce, this.config.tokenHashSecret),
-      optionId,
+      validatedOptionIds,
       this.config.maxVotesPerPoll,
     );
     if (result === 'expired' || result === 'invalid-option') {

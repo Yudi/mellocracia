@@ -16,6 +16,8 @@ FROM deps AS builder
 ENV NX_DAEMON=false \
     NX_NO_CLOUD=true
 COPY nx.json tsconfig.base.json ./
+COPY prisma ./prisma
+COPY prisma.config.ts ./
 COPY apps/backend ./apps/backend
 COPY libs ./libs
 RUN --mount=type=cache,target=/workspace/.nx/cache \
@@ -38,6 +40,8 @@ RUN apk add --no-cache dumb-init \
 
 COPY --from=production-deps --chown=app:app /workspace/node_modules ./node_modules
 COPY --from=builder --chown=app:app /workspace/dist/apps/backend ./
+COPY --from=builder --chown=app:app /workspace/prisma ./prisma
+COPY --from=builder --chown=app:app /workspace/prisma.config.ts ./
 
 USER app
 EXPOSE 3000

@@ -39,9 +39,12 @@ export class CreatePollDto {
 }
 
 export class CastVoteDto {
-  @IsString()
-  @MaxLength(256)
-  optionId!: string;
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(POLL_LIMITS.maxOptions)
+  @IsString({ each: true })
+  @MaxLength(256, { each: true })
+  optionIds!: string[];
 
   @IsOptional()
   @ValidateIf((_object, value) => value !== undefined)

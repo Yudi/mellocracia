@@ -6,16 +6,9 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
 import { AppConfig } from './app/config/app-config';
-import { runMigrations } from './app/database/migrations';
 
 async function bootstrap(): Promise<void> {
   const config = new AppConfig();
-  if (process.argv.includes('--migrate')) {
-    await runMigrations(config);
-    Logger.log('Database migrations completed');
-    return;
-  }
-
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   app.setGlobalPrefix('api');
   app.use(helmet());

@@ -74,7 +74,7 @@ export class PollController {
     const nonce = cookies?.[this.config.cookieName];
     return this.polls.castVote(
       shareToken,
-      body.optionId,
+      body.optionIds,
       nonce,
       this.clientIp.hashRequestIp(request),
       body.turnstileToken,

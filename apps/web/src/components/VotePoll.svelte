@@ -12,7 +12,7 @@
   let poll: PollResponse | null = null;
   let loading = true;
   let loadError = '';
-  let selectedOptionId = '';
+  let selectedOptionIds: string[] = [];
   let turnstileToken: string | undefined;
   let turnstileResetKey = 0;
   let submitting = false;
@@ -41,14 +41,14 @@
   }
 
   async function submitVote() {
-    if (!selectedOptionId || submitting || submitted) return;
+    if (selectedOptionIds.length === 0 || submitting || submitted) return;
     submitting = true;
     submitError = '';
     duplicate = false;
 
     try {
       await api.castVote(token, {
-        optionId: selectedOptionId,
+        optionIds: selectedOptionIds,
         ...(turnstileToken ? { turnstileToken } : {}),
       });
       submitted = true;
@@ -68,6 +68,12 @@
 
   function formatDate(value: string): string {
     return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+  }
+
+  function toggleOption(optionId: string): void {
+    selectedOptionIds = selectedOptionIds.includes(optionId)
+      ? selectedOptionIds.filter((selectedId) => selectedId !== optionId)
+      : [...selectedOptionIds, optionId];
   }
 </script>
 
@@ -106,18 +112,35 @@
 
     <form class="ballot-form" onsubmit={(event) => { event.preventDefault(); void submitVote(); }}>
       <fieldset>
-        <legend class="ballot-legend">Escolha um jogo</legend>
+        <legend class="ballot-legend">Escolha um ou mais jogos</legend>
+        <p class="ballot-selection-note" aria-live="polite">
+          {selectedOptionIds.length === 0
+            ? 'Marque todos os jogos que você quer jogar.'
+            : `${selectedOptionIds.length} ${selectedOptionIds.length === 1 ? 'jogo marcado' : 'jogos marcados'}.`}
+        </p>
         <div class="ballot-grid">
           {#each poll.options as option, index (option.id)}
-            <label class:selected={selectedOptionId === option.id} class="ballot-option">
-              <input type="radio" name="poll-option" value={option.id} checked={selectedOptionId === option.id} onchange={() => (selectedOptionId = option.id)} />
+            <article class:selected={selectedOptionIds.includes(option.id)} class="ballot-option">
+              <label class="ballot-select">
+                <input type="checkbox" name="poll-option" value={option.id} checked={selectedOptionIds.includes(option.id)} onchange={() => toggleOption(option.id)} />
               <span class="ballot-cover">
                 {#if option.featureImage}<img src={option.featureImage} alt={option.featureImageAlt || option.title} loading="lazy" referrerpolicy="no-referrer" />{:else}<span class="cover-fallback" aria-hidden="true">{option.title.slice(0, 1)}</span>{/if}
                 <span class="ballot-index">{String(index + 1).padStart(2, '0')}</span>
-                <span class="ballot-check" aria-hidden="true">{#if selectedOptionId === option.id}<TallyMark size={25} />{/if}</span>
+                <span class="ballot-check" aria-hidden="true">{#if selectedOptionIds.includes(option.id)}<TallyMark size={25} />{/if}</span>
               </span>
-              <span class="ballot-copy"><strong>{option.title}</strong>{#if option.excerpt}<span>{option.excerpt}</span>{/if}</span>
-            </label>
+                <span class="ballot-copy">
+                  <strong>{option.title}</strong>
+                  {#if option.tags.length > 0}
+                    <span class="ballot-tags" aria-label={`Tags: ${option.tags.join(', ')}`}>
+                      {#each option.tags as tag (tag)}<span class="ballot-tag">{tag}</span>{/each}
+                    </span>
+                  {:else}<span class="ballot-untagged">Sem tags</span>{/if}
+                </span>
+              </label>
+              {#if option.sourceUrl}
+                <a class="ballot-source" href={option.sourceUrl} target="_blank" rel="noreferrer">Abrir post <Icon name="external" size={16} /></a>
+              {/if}
+            </article>
           {/each}
         </div>
       </fieldset>
@@ -131,8 +154,8 @@
       {/if}
 
       <div class="ballot-submit-row">
-        <p class="ballot-privacy">Um voto por navegador.</p>
-        <button class="button primary ballot-submit" type="submit" disabled={!selectedOptionId || submitting || expired}>
+        <p class="ballot-privacy">Um voto por navegador. Você pode marcar mais de um jogo.</p>
+        <button class="button primary ballot-submit" type="submit" disabled={selectedOptionIds.length === 0 || submitting || expired}>
           {#if submitting}<span class="button-loader" aria-hidden="true"></span> Registrando…{:else}Confirmar voto <Icon name="arrow-right" size={21} />{/if}
         </button>
       </div>
@@ -236,6 +259,13 @@
     font-weight: 800;
   }
 
+  .ballot-selection-note {
+    margin: -8px 0 17px;
+    color: var(--ink-soft);
+    font-size: 0.88rem;
+    line-height: 1.4;
+  }
+
   .ballot-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -243,7 +273,8 @@
   }
 
   .ballot-option {
-    display: block;
+    display: flex;
+    flex-direction: column;
     min-width: 0;
     border: 2px solid var(--ink);
     border-radius: 0;
@@ -253,6 +284,12 @@
     overflow: hidden;
     clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
     transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  }
+
+  .ballot-select {
+    display: block;
+    min-width: 0;
+    cursor: pointer;
   }
 
   .ballot-option:hover,
@@ -334,16 +371,54 @@
     line-height: 1;
   }
 
-  .ballot-copy span {
-    display: -webkit-box;
-    max-height: 37px;
+  .ballot-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
     margin-top: 7px;
-    overflow: hidden;
+  }
+
+  .ballot-tag,
+  .ballot-untagged {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 3px 6px;
     color: var(--ink-soft);
-    font-size: 0.78rem;
-    line-height: 1.35;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+
+  .ballot-untagged {
+    margin-top: 7px;
+    border-style: dashed;
+    font-weight: 400;
+  }
+
+  .ballot-source {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 44px;
+    margin-top: auto;
+    border-top: 1px solid var(--line);
+    padding: 10px 14px;
+    color: var(--ink-soft);
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  .ballot-source:hover {
+    color: var(--cobalt);
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 
   .ballot-submit-row {
@@ -402,9 +477,9 @@
       gap: 13px;
     }
 
-    .ballot-option {
+    .ballot-select {
       display: grid;
-      grid-template-columns: 122px 1fr;
+      grid-template-columns: 122px minmax(0, 1fr);
     }
 
     .ballot-cover {
@@ -414,6 +489,10 @@
     .ballot-copy {
       align-self: center;
       padding: 15px;
+    }
+
+    .ballot-source {
+      margin-left: 122px;
     }
 
     .ballot-submit-row {
