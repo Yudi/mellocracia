@@ -143,9 +143,13 @@ services:
       - -c
       - work_mem=4MB
       - -c
+      - checkpoint_timeout=15min
+      - -c
       - checkpoint_completion_target=0.9
       - -c
       - wal_buffers=8MB
+      - -c
+      - min_wal_size=256MB
       - -c
       - random_page_cost=4
       - -c
@@ -177,7 +181,9 @@ services:
       [
         'redis-server',
         '--appendonly',
-        'yes',
+        'no',
+        '--save',
+        '',
         '--maxmemory',
         '256mb',
         '--maxmemory-policy',
@@ -185,8 +191,6 @@ services:
       ]
     expose:
       - '6379'
-    volumes:
-      - ${DATA_ROOT:-/home/shared/docker-data/mellocracia}/redis:/data
     networks:
       - backend
     healthcheck:
