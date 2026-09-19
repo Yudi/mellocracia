@@ -36,6 +36,7 @@ export interface CreatePollResponse {
   voteUrl: string;
   resultsUrl: string;
   editUrl: string;
+  closesAt: string;
   expiresAt: string;
   optionCount: number;
 }
@@ -52,7 +53,7 @@ export interface PollOption {
 
 export interface PollResponse {
   title: string;
-  expiresAt: string;
+  closesAt: string;
   hasVoted: boolean;
   options: PollOption[];
 }
@@ -83,6 +84,7 @@ export interface PollResultOption extends PollOption {
 
 export interface PollResultsResponse {
   title: string;
+  closesAt: string;
   expiresAt: string;
   totalVotes: number;
   options: PollResultOption[];

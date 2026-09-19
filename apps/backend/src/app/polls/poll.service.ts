@@ -33,6 +33,7 @@ import { RateLimitService } from '../security/rate-limit.service';
 import { TurnstileService } from '../security/turnstile.service';
 
 export const POLL_NOT_FOUND_MESSAGE = 'Poll not found or expired';
+const RESULTS_RETENTION_DAYS = 7;
 
 @Injectable()
 export class PollService {
@@ -70,12 +71,15 @@ export class PollService {
 
     const shareToken = createOpaqueToken();
     const editToken = createOpaqueToken();
-    const expiresAt = new Date(Date.now() + durationHours * 60 * 60 * 1_000);
+    const closesAt = new Date(Date.now() + durationHours * 60 * 60 * 1_000);
+    const expiresAt = new Date(closesAt);
+    expiresAt.setUTCDate(expiresAt.getUTCDate() + RESULTS_RETENTION_DAYS);
     await this.repository.create({
       id: randomUUID(),
       title,
       shareTokenHash: hashSecret(shareToken, this.config.tokenHashSecret),
       editTokenHash: hashSecret(editToken, this.config.tokenHashSecret),
+      closesAt,
       expiresAt,
       options: this.toSnapshotOptions(selected as CatalogItem[]),
     });
@@ -84,6 +88,7 @@ export class PollService {
       voteUrl: `${this.config.publicOrigin}${this.config.votePathPrefix}/${shareToken}`,
       resultsUrl: `${this.config.publicOrigin}${this.config.resultsPathPrefix}/${shareToken}`,
       editUrl: `${this.config.publicOrigin}${this.config.editPathPrefix}/${editToken}`,
+      closesAt: closesAt.toISOString(),
       expiresAt: expiresAt.toISOString(),
       optionCount: selected.length,
     };
@@ -105,7 +110,7 @@ export class PollService {
     }
     return {
       title: record.title,
-      expiresAt: record.expiresAt.toISOString(),
+      closesAt: record.closesAt.toISOString(),
       hasVoted: record.hasVoted,
       options: cryptographicallyShuffle(record.options).map((option) => ({
         id: option.id,
@@ -129,7 +134,7 @@ export class PollService {
     }
     return {
       title: record.title,
-      expiresAt: record.expiresAt.toISOString(),
+      closesAt: record.closesAt.toISOString(),
       hasVoted: false,
       options: record.options.map((option) => ({
         id: option.id,
@@ -249,6 +254,7 @@ export class PollService {
     }
     return {
       title: result.title,
+      closesAt: result.closesAt.toISOString(),
       expiresAt: result.expiresAt.toISOString(),
       totalVotes: result.totalVotes,
       options: result.options,

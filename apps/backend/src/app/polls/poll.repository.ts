@@ -18,6 +18,7 @@ export interface PollSnapshotOption {
 export interface PollRecord {
   id: string;
   title: string;
+  closesAt: Date;
   expiresAt: Date;
   totalVotes: number;
   hasVoted: boolean;
@@ -29,6 +30,7 @@ export interface CreatePollRecord {
   title: string;
   shareTokenHash: string;
   editTokenHash: string;
+  closesAt: Date;
   expiresAt: Date;
   options: readonly PollOption[];
 }
@@ -44,6 +46,7 @@ export class PollRepository {
         title: record.title,
         shareTokenHash: record.shareTokenHash,
         editTokenHash: record.editTokenHash,
+        closesAt: record.closesAt,
         expiresAt: record.expiresAt,
         options: {
           create: record.options.map((option, position) => ({
@@ -65,16 +68,16 @@ export class PollRepository {
     shareTokenHash: string,
     voterNonceHash?: string,
   ): Promise<PollRecord | undefined> {
-    return this.findByTokenHash({ shareTokenHash }, voterNonceHash);
+    return this.findActiveByTokenHash({ shareTokenHash }, voterNonceHash);
   }
 
   async findByEditTokenHash(
     editTokenHash: string,
   ): Promise<PollRecord | undefined> {
-    return this.findByTokenHash({ editTokenHash });
+    return this.findActiveByTokenHash({ editTokenHash });
   }
 
-  private async findByTokenHash(
+  private async findActiveByTokenHash(
     token: {
       shareTokenHash?: string;
       editTokenHash?: string;
@@ -84,7 +87,7 @@ export class PollRepository {
     const poll = await this.database.prisma.poll.findFirst({
       where: {
         ...token,
-        expiresAt: { gt: new Date() },
+        closesAt: { gt: new Date() },
       },
       include: {
         options: {
@@ -105,6 +108,7 @@ export class PollRepository {
     return {
       id: poll.id,
       title: poll.title,
+      closesAt: poll.closesAt,
       expiresAt: poll.expiresAt,
       totalVotes: poll.totalVotes,
       hasVoted: poll.votes.length > 0,
@@ -129,7 +133,7 @@ export class PollRepository {
     return this.database.prisma.$transaction(
       async (transaction) => {
         const poll = await transaction.poll.findFirst({
-          where: { id: pollId, expiresAt: { gt: new Date() } },
+          where: { id: pollId, closesAt: { gt: new Date() } },
           select: { totalVotes: true },
         });
         if (!poll) {
@@ -192,34 +196,39 @@ export class PollRepository {
   async findResults(shareTokenHash: string): Promise<
     | {
         title: string;
+        closesAt: Date;
         expiresAt: Date;
         totalVotes: number;
         options: PollResultOption[];
       }
     | undefined
   > {
-    const record = await this.findByShareTokenHash(shareTokenHash);
-    if (!record) {
+    const poll = await this.database.prisma.poll.findFirst({
+      where: { shareTokenHash, expiresAt: { gt: new Date() } },
+      include: { options: { orderBy: { position: 'asc' } } },
+    });
+    if (!poll || poll.options.length === 0) {
       return undefined;
     }
-    const totalVotes = record.totalVotes;
+    const totalVotes = poll.totalVotes;
     return {
-      title: record.title,
-      expiresAt: record.expiresAt,
+      title: poll.title,
+      closesAt: poll.closesAt,
+      expiresAt: poll.expiresAt,
       totalVotes,
-      options: record.options.map((option) => ({
-        id: option.id,
+      options: poll.options.map((option) => ({
+        id: option.postId,
         title: option.title,
         excerpt: option.excerpt,
         tags: option.tags,
         featureImage: option.featureImage,
         featureImageAlt: option.featureImageAlt,
         sourceUrl: option.sourceUrl,
-        votes: option.votes,
+        votes: option.voteCount,
         percentage:
           totalVotes === 0
             ? 0
-            : Number(((option.votes / totalVotes) * 100).toFixed(2)),
+            : Number(((option.voteCount / totalVotes) * 100).toFixed(2)),
       })),
     };
   }
@@ -253,7 +262,7 @@ export class PollRepository {
     return this.database.prisma.$transaction(
       async (transaction) => {
         const poll = await transaction.poll.findFirst({
-          where: { id: pollId, expiresAt: { gt: new Date() } },
+          where: { id: pollId, closesAt: { gt: new Date() } },
           select: { totalVotes: true },
         });
         if (!poll) {

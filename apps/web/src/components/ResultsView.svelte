@@ -97,7 +97,8 @@
         <p class="results-meta">
           {results.totalVotes}
           {results.totalVotes === 1 ? 'voto contado' : 'votos contados'} - esta cédula
-          expira em {formatDate(results.expiresAt)}
+          encerrou em {formatDate(results.closesAt)}. Resultados disponíveis até
+          {formatDate(results.expiresAt)}
         </p>
       </div>
       <button

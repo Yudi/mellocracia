@@ -34,7 +34,7 @@
   let copyError = '';
   let editLoading = false;
   let editLoadError = '';
-  let expiresAt = '';
+  let closesAt = '';
   let saving = false;
   let saved = false;
 
@@ -137,7 +137,7 @@
     try {
       const poll = await api.getPollForEdit(editToken);
       title = poll.title;
-      expiresAt = poll.expiresAt;
+      closesAt = poll.closesAt;
       selectedIds = poll.options.map((option) => option.id);
     } catch (error) {
       editLoadError = describeApiError(
@@ -254,8 +254,8 @@
           Agora é só <strong>compartilhar.</strong>
         </h1>
         <p class="page-intro-copy">
-          Os links expiram em {formatDate(createdPoll.expiresAt)}. Compartilhe o
-          link de votação com a mesa e acompanhe os resultados no mesmo período.
+          A votação encerra em {formatDate(createdPoll.closesAt)}. Os resultados
+          ficam disponíveis até {formatDate(createdPoll.expiresAt)}.
         </p>
       </div>
     </div>
@@ -344,8 +344,8 @@
     {/if}
     <div class="success-footer">
       <span
-        >{createdPoll.optionCount} opções incluídas - expira em {formatDate(
-          createdPoll.expiresAt,
+        >{createdPoll.optionCount} opções incluídas - votação encerra em {formatDate(
+          createdPoll.closesAt,
         )}</span
       >
       <button class="button cobalt" type="button" onclick={newPoll}
@@ -589,7 +589,7 @@
             <div class="edit-summary">
               <span class="dock-label">Editando a votação</span>
               <strong>{title}</strong>
-              <span>Expira em {formatDate(expiresAt)}</span>
+              <span>Votação encerra em {formatDate(closesAt)}</span>
             </div>
           {:else}
             <label>
@@ -607,7 +607,7 @@
               >
             </label>
             <fieldset class="duration-fieldset">
-              <legend class="dock-label">Expira em</legend>
+              <legend class="dock-label">Encerrar votação em</legend>
               <div class="duration-options">
               <label class:active={durationHours === 24} class="duration-option"
                 ><input
@@ -1085,28 +1085,10 @@
   }
 
   .selected-slips {
-    display: flex;
-    flex-wrap: wrap;
-    align-content: start;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr));
     gap: 9px;
     margin-top: 18px;
-    max-height: 174px;
-    padding-right: 5px;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior-y: contain;
-    scrollbar-color: var(--citrus) transparent;
-    scrollbar-width: thin;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .selected-slips::-webkit-scrollbar {
-    width: 7px;
-  }
-
-  .selected-slips::-webkit-scrollbar-thumb {
-    border-radius: 4px;
-    background: var(--citrus);
   }
 
   .selected-slip {
@@ -1114,7 +1096,7 @@
     display: grid;
     grid-template-columns: 32px 1fr;
     align-items: center;
-    width: 128px;
+    width: 100%;
     min-height: 52px;
     border: 1px solid var(--ink);
     border-radius: 0;

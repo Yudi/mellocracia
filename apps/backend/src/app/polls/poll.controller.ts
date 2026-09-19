@@ -92,7 +92,7 @@ export class PollController {
           Math.max(
             1,
             Math.floor(
-              (new Date(poll.expiresAt).getTime() - Date.now()) / 1_000,
+              (new Date(poll.closesAt).getTime() - Date.now()) / 1_000,
             ),
           ) * 1_000,
         path: '/',

@@ -14,12 +14,14 @@ model Poll {
   title            String       @db.Text
   shareTokenHash   String       @unique @map("share_token_hash") @db.Text
   editTokenHash    String       @unique @map("edit_token_hash") @db.Text
+  closesAt         DateTime     @map("closes_at") @db.Timestamptz(6)
   expiresAt        DateTime     @map("expires_at") @db.Timestamptz(6)
   totalVotes       Int          @default(0) @map("total_votes")
   createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   options          PollOption[]
   votes            PollVote[]
 
+  @@index([closesAt], map: "polls_closes_at_idx")
   @@index([expiresAt], map: "polls_expires_at_idx")
   @@map("polls")
 }

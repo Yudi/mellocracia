@@ -102,7 +102,7 @@
       <div>
         <h1 id="poll-title" class="display-title">{poll.title}</h1>
       </div>
-      <p class="expiry-note"><Icon name="clock" size={19} /> encerra em<br /><strong>{formatDate(poll.expiresAt)}</strong></p>
+      <p class="expiry-note"><Icon name="clock" size={19} /> encerra em<br /><strong>{formatDate(poll.closesAt)}</strong></p>
     </div>
 
     {#if expired}

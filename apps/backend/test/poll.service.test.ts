@@ -120,6 +120,28 @@ describe('PollService', () => {
     expect(response.resultsUrl.replace('/r/', '/p/')).toBe(response.voteUrl);
   });
 
+  test('retains results for one week after voting closes', async () => {
+    let created: CreatePollRecord | undefined;
+    const service = createService((record) => {
+      created = record;
+    });
+
+    const response = await service.createPoll(
+      {
+        title: 'Próxima mesa',
+        durationHours: 24,
+        optionPostIds: ['first-post', 'second-post'],
+      },
+      'ip-hash',
+    );
+
+    expect(created?.expiresAt.getTime()).toBe(
+      (created?.closesAt.getTime() ?? 0) + 7 * 24 * 60 * 60 * 1_000,
+    );
+    expect(response.closesAt).toBe(created?.closesAt.toISOString());
+    expect(response.expiresAt).toBe(created?.expiresAt.toISOString());
+  });
+
   test('creates a distinct, hashed edit capability', async () => {
     let created: CreatePollRecord | undefined;
     const service = createService((record) => {
@@ -150,6 +172,7 @@ describe('PollService', () => {
     const record: PollRecord = {
       id: 'poll-id',
       title: 'Próxima mesa',
+      closesAt: new Date(Date.now() + 60_000),
       expiresAt: new Date(Date.now() + 60_000),
       totalVotes: 1,
       hasVoted: true,
@@ -196,6 +219,7 @@ describe('PollService', () => {
     const record: PollRecord = {
       id: 'poll-id',
       title: 'Próxima mesa',
+      closesAt: new Date(Date.now() + 60_000),
       expiresAt: new Date(Date.now() + 60_000),
       totalVotes: 0,
       hasVoted: false,
