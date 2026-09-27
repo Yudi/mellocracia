@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   validatePollCreationInput,
   validateVoteOptionIds,
+  validateVoterName,
 } from '../src/app/polls/poll.validation';
 
 describe('poll creation validation', () => {
@@ -45,5 +46,22 @@ describe('poll creation validation', () => {
     expect(() => validateVoteOptionIds([], 1_000)).toThrow();
     expect(() => validateVoteOptionIds(['post-a', 'post-a'], 1_000)).toThrow();
     expect(() => validateVoteOptionIds(['post-a', 'post-b'], 1)).toThrow();
+  });
+});
+
+describe('voter name validation', () => {
+  test('trims names and allows absent names only when optional', () => {
+    expect(validateVoterName('  João Silva  ', true)).toBe('João Silva');
+    expect(validateVoterName(undefined, false)).toBeNull();
+    expect(validateVoterName('  ', false)).toBeNull();
+    expect(() => validateVoterName(undefined, true)).toThrow();
+    expect(() => validateVoterName(' \t ', true)).toThrow();
+  });
+
+  test('rejects non-string and oversized names', () => {
+    for (const value of [null, 123, {}, 'a'.repeat(121)]) {
+      expect(() => validateVoterName(value, false)).toThrow();
+    }
+    expect(validateVoterName('a'.repeat(120), true)).toHaveLength(120);
   });
 });

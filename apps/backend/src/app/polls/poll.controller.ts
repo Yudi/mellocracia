@@ -118,6 +118,7 @@ export class PollController {
       nonce,
       this.clientIp.hashRequestIp(request),
       body.turnstileToken,
+      body.voterName,
     );
   }
 

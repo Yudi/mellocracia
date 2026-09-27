@@ -1,6 +1,29 @@
 import { BadRequestException } from '@nestjs/common';
 import { POLL_LIMITS } from '@mellocracia/contracts';
 
+export function validateVoterName(
+  value: unknown,
+  required: boolean,
+): string | null {
+  if (
+    value !== undefined &&
+    (typeof value !== 'string' || value.length > POLL_LIMITS.maxVoterNameLength)
+  ) {
+    throw new BadRequestException({
+      code: 'INVALID_VOTER_NAME',
+      message: 'O nome deve ter no máximo 120 caracteres.',
+    });
+  }
+  const name = typeof value === 'string' ? value.trim() : '';
+  if (required && !name) {
+    throw new BadRequestException({
+      code: 'VOTER_NAME_REQUIRED',
+      message: 'Informe seu nome para votar.',
+    });
+  }
+  return name || null;
+}
+
 export function validatePollCreationInput(
   titleValue: unknown,
   durationValue: unknown,

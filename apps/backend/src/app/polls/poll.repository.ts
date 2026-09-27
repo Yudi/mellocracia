@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { PollOption, PollResultOption } from '@mellocracia/contracts';
+import {
+  PollOption,
+  PollResultOption,
+  PollResultVoter,
+} from '@mellocracia/contracts';
 import { DatabaseService } from '../database/database.service';
 import { Prisma } from '../../generated/prisma/client';
 
@@ -16,6 +20,7 @@ export interface PollSnapshotOption {
 }
 
 export interface PollRecord {
+  requireVoterName: boolean;
   id: string;
   title: string;
   closesAt: Date;
@@ -26,6 +31,7 @@ export interface PollRecord {
 }
 
 export interface CreatePollRecord {
+  requireVoterName: boolean;
   id: string;
   title: string;
   shareTokenHash: string;
@@ -44,6 +50,7 @@ export class PollRepository {
       data: {
         id: record.id,
         title: record.title,
+        requireVoterName: record.requireVoterName,
         shareTokenHash: record.shareTokenHash,
         editTokenHash: record.editTokenHash,
         closesAt: record.closesAt,
@@ -108,6 +115,7 @@ export class PollRepository {
     return {
       id: poll.id,
       title: poll.title,
+      requireVoterName: poll.requireVoterName,
       closesAt: poll.closesAt,
       expiresAt: poll.expiresAt,
       totalVotes: poll.totalVotes,
@@ -168,6 +176,7 @@ export class PollRepository {
     voterNonceHash: string,
     optionIds: readonly string[],
     maxVotes: number,
+    voterName: string | null,
   ): Promise<
     'accepted' | 'duplicate' | 'invalid-option' | 'expired' | 'capacity'
   > {
@@ -178,6 +187,7 @@ export class PollRepository {
           voterNonceHash,
           optionIds,
           maxVotes,
+          voterName,
         );
       } catch (error) {
         if (this.isPrismaError(error, 'P2002')) {
@@ -200,22 +210,40 @@ export class PollRepository {
         expiresAt: Date;
         totalVotes: number;
         options: PollResultOption[];
+        voters: PollResultVoter[];
       }
     | undefined
   > {
     const poll = await this.database.prisma.poll.findFirst({
       where: { shareTokenHash, expiresAt: { gt: new Date() } },
-      include: { options: { orderBy: { position: 'asc' } } },
+      include: {
+        options: { orderBy: { position: 'asc' } },
+        votes: {
+          orderBy: [{ createdAt: 'asc' }, { optionPostId: 'asc' }],
+          select: { voterNonceHash: true, voterName: true, optionPostId: true },
+        },
+      },
     });
     if (!poll || poll.options.length === 0) {
       return undefined;
     }
     const totalVotes = poll.totalVotes;
+    // Group selections by browser identity, never by the supplied display name.
+    const voters = new Map<string, PollResultVoter>();
+    for (const vote of poll.votes) {
+      const voter = voters.get(vote.voterNonceHash) ?? {
+        name: vote.voterName,
+        optionIds: [],
+      };
+      voter.optionIds.push(vote.optionPostId);
+      voters.set(vote.voterNonceHash, voter);
+    }
     return {
       title: poll.title,
       closesAt: poll.closesAt,
       expiresAt: poll.expiresAt,
       totalVotes,
+      voters: [...voters.values()],
       options: poll.options.map((option) => ({
         id: option.postId,
         title: option.title,
@@ -256,6 +284,7 @@ export class PollRepository {
     voterNonceHash: string,
     optionIds: readonly string[],
     maxVotes: number,
+    voterName: string | null,
   ): Promise<
     'accepted' | 'duplicate' | 'invalid-option' | 'expired' | 'capacity'
   > {
@@ -293,6 +322,7 @@ export class PollRepository {
             pollId,
             voterNonceHash,
             optionPostId,
+            voterName,
           })),
         });
         await transaction.pollOption.updateMany({

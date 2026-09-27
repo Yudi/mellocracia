@@ -16,6 +16,7 @@
   let loading = true;
   let errorMessage = '';
   let expired = false;
+  $: optionTitles = new Map(results?.options.map((option) => [option.id, option.title]) ?? []);
 
   $: rankedOptions = results
     ? [...results.options].sort(
@@ -166,6 +167,24 @@
       </ol>
     {/if}
 
+    {#if results.voters.length > 0}
+      <section class="individual-votes" aria-labelledby="individual-votes-title">
+        <h2 id="individual-votes-title">Quem votou</h2>
+        <ol class="voter-list">
+          {#each results.voters as voter}
+            <li>
+              <strong>{voter.name || 'Nome não informado'}</strong>
+              <ul aria-label="Jogos escolhidos">
+                {#each voter.optionIds as optionId}
+                  <li>{optionTitles.get(optionId)}</li>
+                {/each}
+              </ul>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
+
     <div class="results-footer">
       <span>Este link mostra apenas os resultados.</span><a href="/"
         >Criar outra votação <Icon name="arrow-right" size={16} /></a
@@ -175,6 +194,22 @@
 {/if}
 
 <style>
+  .individual-votes { margin-top: 36px; }
+  .individual-votes h2 { font-family: var(--font-display); font-size: 1.65rem; }
+  .voter-list { list-style: none; padding: 0; margin: 0; }
+  .voter-list > li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: 16px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--line);
+    overflow-wrap: anywhere;
+  }
+  .voter-list ul { margin: 0; padding-left: 20px; }
+  @media (max-width: 620px) {
+    .voter-list > li { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  }
+
   .results-loading {
     min-height: 390px;
   }

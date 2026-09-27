@@ -73,6 +73,7 @@ function createService(
   } as AppConfig;
   const rateLimit = {
     enforceCreate: async () => undefined,
+    enforceVote: async () => undefined,
   } as RateLimitService;
   const turnstile = { verify: async () => undefined } as TurnstileService;
 
@@ -80,6 +81,72 @@ function createService(
 }
 
 describe('PollService', () => {
+  test('persists the name requirement and returns it on the ballot', async () => {
+    let created: CreatePollRecord | undefined;
+    const service = createService(
+      (record) => {
+        created = record;
+      },
+      {
+        findByShareTokenHash: async () => ({
+          ...created,
+          hasVoted: false,
+          totalVotes: 0,
+        }),
+      },
+    );
+    const response = await service.createPoll(
+      {
+        title: 'Mesa',
+        durationHours: 24,
+        optionPostIds: ['first-post', 'second-post'],
+        requireVoterName: true,
+      },
+      'ip',
+    );
+    expect(created?.requireVoterName).toBe(true);
+    expect(
+      (await service.getPoll(response.voteUrl.split('/').at(-1) ?? ''))
+        .requireVoterName,
+    ).toBe(true);
+  });
+
+  test('enforces required names before writing and passes a normalized name with all selections', async () => {
+    const writes: unknown[][] = [];
+    let required = true;
+    const service = createService(() => undefined, {
+      findByShareTokenHash: async () => ({
+        id: 'poll',
+        requireVoterName: required,
+      }),
+      castVote: async (...args: unknown[]) => {
+        writes.push(args);
+        return 'accepted';
+      },
+    });
+    const token = createOpaqueToken();
+    const nonce = createOpaqueToken();
+    for (const name of [undefined, '', '  ']) {
+      await expect(
+        service.castVote(token, ['first-post'], nonce, 'ip', undefined, name),
+      ).rejects.toThrow('Informe seu nome');
+    }
+    expect(writes).toHaveLength(0);
+    await service.castVote(
+      token,
+      ['first-post', 'second-post'],
+      nonce,
+      'ip',
+      undefined,
+      '  Ana  ',
+    );
+    expect(writes[0][2]).toEqual(['first-post', 'second-post']);
+    expect(writes[0][4]).toBe('Ana');
+    required = false;
+    await service.castVote(token, ['first-post'], nonce, 'ip');
+    expect(writes[1][4]).toBeNull();
+  });
+
   test('snapshots selected post IDs, order, and tags instead of catalog positions', async () => {
     let created: CreatePollRecord | undefined;
     const service = createService((record) => {
@@ -99,6 +166,7 @@ describe('PollService', () => {
       'second-post',
       'first-post',
     ]);
+    expect(created?.requireVoterName).toBe(false);
     expect(created?.options.map((option) => option.tags)).toEqual([
       ['Cooperativo', 'Família'],
       ['Estratégia'],
@@ -170,6 +238,7 @@ describe('PollService', () => {
     const voterNonce = createOpaqueToken();
     let receivedVoterNonceHash: string | undefined;
     const record: PollRecord = {
+      requireVoterName: false,
       id: 'poll-id',
       title: 'Próxima mesa',
       closesAt: new Date(Date.now() + 60_000),
@@ -217,6 +286,7 @@ describe('PollService', () => {
     const editToken = createOpaqueToken();
     let replacedOptions: CreatePollRecord['options'] | undefined;
     const record: PollRecord = {
+      requireVoterName: false,
       id: 'poll-id',
       title: 'Próxima mesa',
       closesAt: new Date(Date.now() + 60_000),

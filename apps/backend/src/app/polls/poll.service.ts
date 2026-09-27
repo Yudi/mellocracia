@@ -22,6 +22,7 @@ import {
   validatePollCreationInput,
   validatePollOptionPostIds,
   validateVoteOptionIds,
+  validateVoterName,
 } from './poll.validation';
 import {
   createOpaqueToken,
@@ -77,6 +78,7 @@ export class PollService {
     await this.repository.create({
       id: randomUUID(),
       title,
+      requireVoterName: input.requireVoterName ?? false,
       shareTokenHash: hashSecret(shareToken, this.config.tokenHashSecret),
       editTokenHash: hashSecret(editToken, this.config.tokenHashSecret),
       closesAt,
@@ -110,6 +112,7 @@ export class PollService {
     }
     return {
       title: record.title,
+      requireVoterName: record.requireVoterName,
       closesAt: record.closesAt.toISOString(),
       hasVoted: record.hasVoted,
       options: cryptographicallyShuffle(record.options).map((option) => ({
@@ -136,6 +139,7 @@ export class PollService {
       title: record.title,
       closesAt: record.closesAt.toISOString(),
       hasVoted: false,
+      requireVoterName: record.requireVoterName,
       options: record.options.map((option) => ({
         id: option.id,
         title: option.title,
@@ -196,6 +200,7 @@ export class PollService {
     voterNonce: string | undefined,
     ipHash: string,
     turnstileToken?: string,
+    voterName?: unknown,
   ): Promise<CastVoteResponse> {
     const candidateToken =
       typeof shareToken === 'string' && shareToken.length <= 128
@@ -225,6 +230,7 @@ export class PollService {
       hashSecret(voterNonce, this.config.tokenHashSecret),
       validatedOptionIds,
       this.config.maxVotesPerPoll,
+      validateVoterName(voterName, record.requireVoterName),
     );
     if (result === 'expired' || result === 'invalid-option') {
       throw this.notFound();
@@ -258,6 +264,7 @@ export class PollService {
       expiresAt: result.expiresAt.toISOString(),
       totalVotes: result.totalVotes,
       options: result.options,
+      voters: result.voters,
     };
   }
 

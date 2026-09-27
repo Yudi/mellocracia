@@ -4,6 +4,7 @@ export const POLL_LIMITS = {
   minDurationHours: 1,
   maxDurationHours: 14 * 24,
   maxTitleLength: 120,
+  maxVoterNameLength: 120,
   maxCatalogPosts: 1_000,
 } as const;
 
@@ -26,6 +27,7 @@ export interface CatalogResponse {
 }
 
 export interface CreatePollRequest {
+  requireVoterName?: boolean;
   title: string;
   durationHours: number;
   optionPostIds: string[];
@@ -52,6 +54,7 @@ export interface PollOption {
 }
 
 export interface PollResponse {
+  requireVoterName: boolean;
   title: string;
   closesAt: string;
   hasVoted: boolean;
@@ -68,6 +71,7 @@ export interface UpdatePollChoicesResponse {
 }
 
 export interface CastVoteRequest {
+  voterName?: string;
   optionIds: string[];
   turnstileToken?: string;
 }
@@ -83,11 +87,17 @@ export interface PollResultOption extends PollOption {
 }
 
 export interface PollResultsResponse {
+  voters: PollResultVoter[];
   title: string;
   closesAt: string;
   expiresAt: string;
   totalVotes: number;
   options: PollResultOption[];
+}
+
+export interface PollResultVoter {
+  name: string | null;
+  optionIds: string[];
 }
 
 export interface ApiErrorResponse {

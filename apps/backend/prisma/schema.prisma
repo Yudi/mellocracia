@@ -10,6 +10,7 @@ datasource db {
 }
 
 model Poll {
+  requireVoterName  Boolean      @default(false) @map("require_voter_name")
   id               String       @id @db.Text
   title            String       @db.Text
   shareTokenHash   String       @unique @map("share_token_hash") @db.Text
@@ -47,6 +48,7 @@ model PollOption {
 }
 
 model PollVote {
+  voterName      String?    @map("voter_name") @db.VarChar(120)
   pollId         String     @map("poll_id") @db.Text
   voterNonceHash String     @map("voter_nonce_hash") @db.Text
   optionPostId   String     @map("option_post_id") @db.Text

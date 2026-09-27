@@ -24,6 +24,7 @@
   let catalogStale = false;
   let query = '';
   let title = '';
+  let requireVoterName = false;
   let durationHours: DurationHours = 72;
   let turnstileToken: string | undefined;
   let turnstileResetKey = 0;
@@ -159,6 +160,7 @@
       createdPoll = await api.createPoll({
         title: title.trim(),
         durationHours,
+        requireVoterName,
         optionPostIds: selectedIds,
         ...(turnstileToken ? { turnstileToken } : {}),
       });
@@ -227,6 +229,7 @@
     createError = '';
     selectedIds = [];
     title = '';
+    requireVoterName = false;
     query = '';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -606,6 +609,10 @@
                 >{title.length}/{POLL_LIMITS.maxTitleLength}</span
               >
             </label>
+            <label class="name-requirement">
+              <input type="checkbox" bind:checked={requireVoterName} />
+              <span>Exigir nome para votar</span>
+            </label>
             <fieldset class="duration-fieldset">
               <legend class="dock-label">Encerrar votação em</legend>
               <div class="duration-options">
@@ -703,6 +710,20 @@
 {/if}
 
 <style>
+  .name-requirement {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    cursor: pointer;
+  }
+
+  .name-requirement input {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--citrus);
+  }
+
   .visually-hidden {
     position: absolute;
     width: 1px;

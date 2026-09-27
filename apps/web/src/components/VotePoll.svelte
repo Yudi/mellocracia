@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { PollResponse } from '@mellocracia/contracts';
+  import { POLL_LIMITS } from '@mellocracia/contracts';
   import Icon from './Icon.svelte';
   import TallyMark from './TallyMark.svelte';
   import TurnstileWidget from './TurnstileWidget.svelte';
@@ -13,6 +14,7 @@
   let loading = true;
   let loadError = '';
   let selectedOptionIds: string[] = [];
+  let voterName = '';
   let turnstileToken: string | undefined;
   let turnstileResetKey = 0;
   let submitting = false;
@@ -46,12 +48,17 @@
 
   async function submitVote() {
     if (selectedOptionIds.length === 0 || submitting || submitted) return;
+    if (poll?.requireVoterName && !voterName.trim()) {
+      submitError = 'Informe seu nome para votar.';
+      return;
+    }
     submitting = true;
     submitError = '';
 
     try {
       await api.castVote(token, {
         optionIds: selectedOptionIds,
+        voterName: voterName.trim(),
         ...(turnstileToken ? { turnstileToken } : {}),
       });
       submitted = true;
@@ -146,6 +153,15 @@
         </div>
       </fieldset>
 
+      <div class="voter-name-field">
+        <label for="voter-name">Seu nome {poll.requireVoterName ? '(obrigatório)' : '(opcional)'}</label>
+        <input class="text-input" id="voter-name" name="voterName" type="text" autocomplete="name"
+          bind:value={voterName} required={poll.requireVoterName}
+          maxlength={POLL_LIMITS.maxVoterNameLength} disabled={submitting || expired}
+          aria-describedby="voter-name-note" />
+        <p id="voter-name-note">Seu nome e os jogos escolhidos aparecerão nos resultados.</p>
+      </div>
+
       {#if turnstileSiteKey}
         <TurnstileWidget
           siteKey={turnstileSiteKey}
@@ -165,6 +181,17 @@
 {/if}
 
 <style>
+  .voter-name-field {
+    display: grid;
+    gap: 8px;
+    max-width: 480px;
+    margin-top: 28px;
+  }
+
+  .voter-name-field label { font-weight: 700; }
+  .voter-name-field input { width: 100%; min-width: 0; }
+  .voter-name-field p { margin: 0; color: var(--ink-soft); font-size: 0.85rem; }
+
   .poll-loading {
     min-height: 390px;
   }

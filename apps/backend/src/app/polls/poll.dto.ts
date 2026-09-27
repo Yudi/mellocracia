@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsInt,
   IsOptional,
   IsString,
@@ -14,6 +15,10 @@ import {
 import { POLL_LIMITS } from '@mellocracia/contracts';
 
 export class CreatePollDto {
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsBoolean()
+  requireVoterName?: boolean;
+
   @IsString()
   @MaxLength(POLL_LIMITS.maxTitleLength)
   title!: string;
@@ -39,6 +44,11 @@ export class CreatePollDto {
 }
 
 export class CastVoteDto {
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @MaxLength(POLL_LIMITS.maxVoterNameLength)
+  voterName?: string;
+
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(POLL_LIMITS.maxOptions)
