@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { POLL_LIMITS } from '@mellocracia/contracts';
+import { getMaxPollEndDate, POLL_LIMITS } from '@mellocracia/contracts';
 
 export function validateVoterName(
   value: unknown,
@@ -29,9 +29,17 @@ export function validatePollCreationInput(
   durationValue: unknown,
   optionPostIds: unknown,
   maxOptions: number,
-): { title: string; durationHours: number; optionPostIds: string[] } {
+  closesAtValue?: unknown,
+  now = new Date(),
+): {
+  title: string;
+  durationDays: number | undefined;
+  closesAt: Date;
+  optionPostIds: string[];
+} {
   const title = typeof titleValue === 'string' ? titleValue.trim() : '';
-  const durationHours = Number(durationValue);
+  const durationDays =
+    durationValue === undefined ? undefined : Number(durationValue);
   if (!title || title.length > 120) {
     throw new BadRequestException({
       code: 'INVALID_TITLE',
@@ -39,20 +47,51 @@ export function validatePollCreationInput(
     });
   }
   if (
-    !Number.isInteger(durationHours) ||
-    durationHours < POLL_LIMITS.minDurationHours ||
-    durationHours > POLL_LIMITS.maxDurationHours
+    closesAtValue === undefined &&
+    (durationDays === undefined ||
+      !Number.isInteger(durationDays) ||
+      durationDays < POLL_LIMITS.minDurationDays ||
+      durationDays > POLL_LIMITS.maxDurationDays)
   ) {
     throw new BadRequestException({
       code: 'INVALID_DURATION',
-      message: `Duration must be between ${POLL_LIMITS.minDurationHours} and ${POLL_LIMITS.maxDurationHours} hours`,
+      message: `Duration must be between ${POLL_LIMITS.minDurationDays} and ${POLL_LIMITS.maxDurationDays} days`,
     });
   }
+  const closesAt = validatePollEndDate(durationDays, closesAtValue, now);
   const optionPostIdsResult = validatePollOptionPostIds(
     optionPostIds,
     maxOptions,
   );
-  return { title, durationHours, optionPostIds: optionPostIdsResult };
+  return { title, durationDays, closesAt, optionPostIds: optionPostIdsResult };
+}
+
+export function validatePollEndDate(
+  durationDays: number | undefined,
+  closesAtValue: unknown,
+  now = new Date(),
+): Date {
+  if (closesAtValue !== undefined && durationDays !== undefined) {
+    throw new BadRequestException({
+      code: 'INVALID_END_DATE',
+      message: 'Escolha uma duração ou uma data de encerramento.',
+    });
+  }
+  const closesAt =
+    closesAtValue === undefined
+      ? new Date(now.getTime() + (durationDays ?? NaN) * 24 * 60 * 60 * 1_000)
+      : new Date(typeof closesAtValue === 'string' ? closesAtValue : NaN);
+  if (
+    !Number.isFinite(closesAt.getTime()) ||
+    closesAt <= now ||
+    closesAt > getMaxPollEndDate(now)
+  ) {
+    throw new BadRequestException({
+      code: 'INVALID_END_DATE',
+      message: 'Escolha uma data futura, no máximo um mês a partir de agora.',
+    });
+  }
+  return closesAt;
 }
 
 export function validatePollOptionPostIds(

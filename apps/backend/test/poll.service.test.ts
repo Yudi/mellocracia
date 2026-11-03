@@ -81,6 +81,47 @@ function createService(
 }
 
 describe('PollService', () => {
+  test('preserves a custom closing timestamp and retains results for seven days', async () => {
+    let created: CreatePollRecord | undefined;
+    const service = createService((record) => {
+      created = record;
+    });
+    const closesAt = new Date(
+      Date.now() + 20 * 24 * 60 * 60 * 1_000,
+    ).toISOString();
+    const response = await service.createPoll(
+      {
+        title: 'Mesa',
+        closesAt,
+        optionPostIds: ['first-post', 'second-post'],
+      },
+      'ip-hash',
+    );
+    expect(response.closesAt).toBe(closesAt);
+    expect(created?.closesAt.toISOString()).toBe(closesAt);
+    expect(created?.expiresAt.getTime()).toBe(
+      Date.parse(closesAt) + 7 * 24 * 60 * 60 * 1_000,
+    );
+  });
+
+  test('rejects an expired custom date without persisting a poll', async () => {
+    let persisted = false;
+    const service = createService(() => {
+      persisted = true;
+    });
+    await expect(
+      service.createPoll(
+        {
+          title: 'Mesa',
+          closesAt: new Date(Date.now() - 60_000).toISOString(),
+          optionPostIds: ['first-post', 'second-post'],
+        },
+        'ip-hash',
+      ),
+    ).rejects.toThrow();
+    expect(persisted).toBe(false);
+  });
+
   test('persists the name requirement and returns it on the ballot', async () => {
     let created: CreatePollRecord | undefined;
     const service = createService(
@@ -98,7 +139,7 @@ describe('PollService', () => {
     const response = await service.createPoll(
       {
         title: 'Mesa',
-        durationHours: 24,
+        durationDays: 1,
         optionPostIds: ['first-post', 'second-post'],
         requireVoterName: true,
       },
@@ -156,7 +197,7 @@ describe('PollService', () => {
     await service.createPoll(
       {
         title: 'Próxima mesa',
-        durationHours: 24,
+        durationDays: 1,
         optionPostIds: ['second-post', 'first-post'],
       },
       'ip-hash',
@@ -179,7 +220,7 @@ describe('PollService', () => {
     const response = await service.createPoll(
       {
         title: 'Próxima mesa',
-        durationHours: 24,
+        durationDays: 1,
         optionPostIds: ['first-post', 'second-post'],
       },
       'ip-hash',
@@ -197,7 +238,7 @@ describe('PollService', () => {
     const response = await service.createPoll(
       {
         title: 'Próxima mesa',
-        durationHours: 24,
+        durationDays: 1,
         optionPostIds: ['first-post', 'second-post'],
       },
       'ip-hash',
@@ -219,7 +260,7 @@ describe('PollService', () => {
     const response = await service.createPoll(
       {
         title: 'Próxima mesa',
-        durationHours: 24,
+        durationDays: 1,
         optionPostIds: ['first-post', 'second-post'],
       },
       'ip-hash',

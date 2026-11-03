@@ -1,8 +1,9 @@
 export const POLL_LIMITS = {
   minOptions: 2,
   maxOptions: 1_000,
-  minDurationHours: 1,
-  maxDurationHours: 14 * 24,
+  minDurationDays: 1,
+  maxDurationDays: 14,
+  maxDurationMonths: 1,
   maxTitleLength: 120,
   maxVoterNameLength: 120,
   maxCatalogPosts: 1_000,
@@ -29,7 +30,8 @@ export interface CatalogResponse {
 export interface CreatePollRequest {
   requireVoterName?: boolean;
   title: string;
-  durationHours: number;
+  durationDays?: number;
+  closesAt?: string;
   optionPostIds: string[];
   turnstileToken?: string;
 }
@@ -105,4 +107,17 @@ export interface ApiErrorResponse {
   code: string;
   message: string;
   retryAfterSeconds?: number;
+}
+
+/** Add the calendar-month limit in UTC, clamping to the last day of the month. */
+export function getMaxPollEndDate(now: Date): Date {
+  const maximum = new Date(now);
+  const day = maximum.getUTCDate();
+  maximum.setUTCDate(1);
+  maximum.setUTCMonth(maximum.getUTCMonth() + POLL_LIMITS.maxDurationMonths);
+  const lastDay = new Date(
+    Date.UTC(maximum.getUTCFullYear(), maximum.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  maximum.setUTCDate(Math.min(day, lastDay));
+  return maximum;
 }

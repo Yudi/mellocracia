@@ -5,6 +5,7 @@ import {
   IsArray,
   IsBoolean,
   IsInt,
+  IsISO8601,
   IsOptional,
   IsString,
   Max,
@@ -23,11 +24,16 @@ export class CreatePollDto {
   @MaxLength(POLL_LIMITS.maxTitleLength)
   title!: string;
 
+  @ValidateIf((_object, value) => value !== undefined)
   @Type(() => Number)
   @IsInt()
-  @Min(POLL_LIMITS.minDurationHours)
-  @Max(POLL_LIMITS.maxDurationHours)
-  durationHours!: number;
+  @Min(POLL_LIMITS.minDurationDays)
+  @Max(POLL_LIMITS.maxDurationDays)
+  durationDays?: number;
+
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsISO8601({ strict: true })
+  closesAt?: string;
 
   @IsArray()
   @ArrayMinSize(POLL_LIMITS.minOptions)

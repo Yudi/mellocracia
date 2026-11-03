@@ -5,7 +5,7 @@
     CatalogResponse,
     CreatePollResponse,
   } from '@mellocracia/contracts';
-  import { POLL_LIMITS } from '@mellocracia/contracts';
+  import { getMaxPollEndDate, POLL_LIMITS } from '@mellocracia/contracts';
   import Icon from './Icon.svelte';
   import TallyMark from './TallyMark.svelte';
   import TurnstileWidget from './TurnstileWidget.svelte';
@@ -13,7 +13,7 @@
 
   export let turnstileSiteKey: string | undefined;
 
-  type DurationHours = 24 | 72 | 168 | 336;
+  type DurationDays = 1 | 3 | 7 | 14 | 'custom';
   type CopyTarget = 'vote' | 'results' | 'edit';
 
   let items: CatalogItem[] = [];
@@ -25,7 +25,16 @@
   let query = '';
   let title = '';
   let requireVoterName = false;
-  let durationHours: DurationHours = 72;
+  let durationDays: DurationDays = 3;
+  let customEndDate = '';
+  let currentTime = new Date();
+
+  $: minEndDate = toLocalDateTime(
+    new Date(Math.ceil((currentTime.getTime() + 1) / 60_000) * 60_000),
+  );
+  $: maxEndDate = toLocalDateTime(getMaxPollEndDate(currentTime));
+  $: endDateError = validateCustomEndDate(customEndDate, currentTime);
+
   let turnstileToken: string | undefined;
   let turnstileResetKey = 0;
   let creating = false;
@@ -55,7 +64,9 @@
   $: canCreate =
     selectedItems.length >= POLL_LIMITS.minOptions &&
     title.trim().length > 0 &&
-    !creating && !saving;
+    (isEditing || durationDays !== 'custom' || !endDateError) &&
+    !creating &&
+    !saving;
   $: allVisibleSelected =
     filteredItems.length > 0 &&
     filteredItems.every((item) => selectedIds.includes(item.id));
@@ -69,9 +80,29 @@
     }).format(new Date(value));
   }
 
+  function toLocalDateTime(date: Date): string {
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+    return local.toISOString().slice(0, 16);
+  }
+
+  function validateCustomEndDate(value: string, now: Date): string {
+    if (!value) return 'Escolha a data e a hora de encerramento.';
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime()) || date <= now) {
+      return 'Escolha uma data e hora futuras.';
+    }
+    if (date > getMaxPollEndDate(now)) {
+      return 'O encerramento deve ser em até um mês a partir de agora.';
+    }
+    return '';
+  }
+
   onMount(() => {
     void loadCatalog();
     if (editToken) void loadEditablePoll();
+    currentTime = new Date();
+    const clock = window.setInterval(() => (currentTime = new Date()), 30_000);
+    return () => window.clearInterval(clock);
   });
 
   async function loadCatalog() {
@@ -151,6 +182,14 @@
   }
 
   async function createPoll() {
+    currentTime = new Date();
+    if (durationDays === 'custom') {
+      const error = validateCustomEndDate(customEndDate, currentTime);
+      if (error) {
+        createError = error;
+        return;
+      }
+    }
     if (!canCreate) return;
     creating = true;
     createError = '';
@@ -159,7 +198,9 @@
     try {
       createdPoll = await api.createPoll({
         title: title.trim(),
-        durationHours,
+        ...(durationDays === 'custom'
+          ? { closesAt: new Date(customEndDate).toISOString() }
+          : { durationDays }),
         requireVoterName,
         optionPostIds: selectedIds,
         ...(turnstileToken ? { turnstileToken } : {}),
@@ -237,14 +278,23 @@
 
 {#if editLoading}
   <div class="loading-state" aria-live="polite">
-    <div><div class="loading-mark" aria-hidden="true"></div><p>Abrindo a cédula para edição…</p></div>
+    <div>
+      <div class="loading-mark" aria-hidden="true"></div>
+      <p>Abrindo a cédula para edição…</p>
+    </div>
   </div>
 {:else if editLoadError}
   <section class="state-panel" aria-labelledby="edit-error-title">
-    <span class="state-mark error-mark" aria-hidden="true"><Icon name="x" size={27} /></span>
-    <h1 id="edit-error-title" class="display-title">Não encontramos esta votação.</h1>
+    <span class="state-mark error-mark" aria-hidden="true"
+      ><Icon name="x" size={27} /></span
+    >
+    <h1 id="edit-error-title" class="display-title">
+      Não encontramos esta votação.
+    </h1>
     <p>{editLoadError}</p>
-    <a class="button cobalt" href="/">Montar uma nova votação <Icon name="arrow-right" size={18} /></a>
+    <a class="button cobalt" href="/"
+      >Montar uma nova votação <Icon name="arrow-right" size={18} /></a
+    >
   </section>
 {:else if createdPoll}
   <section class="success-panel" aria-labelledby="success-title">
@@ -371,7 +421,8 @@
           Monte a cédula dos <strong>próximos jogos.</strong>
         </h1>
         <p class="page-intro-copy">
-          Escolha os jogos, dê um nome para a votação e mande o link para a mesa.
+          Escolha os jogos, dê um nome para a votação e mande o link para a
+          mesa.
         </p>
       {/if}
     </div>
@@ -616,47 +667,80 @@
             <fieldset class="duration-fieldset">
               <legend class="dock-label">Encerrar votação em</legend>
               <div class="duration-options">
-              <label class:active={durationHours === 24} class="duration-option"
-                ><input
-                  type="radio"
-                  name="duration"
-                  value="24"
-                  checked={durationHours === 24}
-                  onchange={() => (durationHours = 24)}
-                /><Icon name="clock" size={19} /><span>24 horas</span></label
-              >
-              <label class:active={durationHours === 72} class="duration-option"
-                ><input
-                  type="radio"
-                  name="duration"
-                  value="72"
-                  checked={durationHours === 72}
-                  onchange={() => (durationHours = 72)}
-                /><Icon name="calendar" size={19} /><span>3 dias</span></label
-              >
-              <label
-                class:active={durationHours === 168}
-                class="duration-option"
-                ><input
-                  type="radio"
-                  name="duration"
-                  value="168"
-                  checked={durationHours === 168}
-                  onchange={() => (durationHours = 168)}
-                /><Icon name="calendar" size={19} /><span>7 dias</span></label
-              >
-              <label
-                class:active={durationHours === 336}
-                class="duration-option"
-                ><input
-                  type="radio"
-                  name="duration"
-                  value="336"
-                  checked={durationHours === 336}
-                  onchange={() => (durationHours = 336)}
-                /><Icon name="calendar" size={19} /><span>14 dias</span></label
-              >
+                <label class:active={durationDays === 1} class="duration-option"
+                  ><input
+                    type="radio"
+                    name="duration"
+                    value="1"
+                    checked={durationDays === 1}
+                    onchange={() => (durationDays = 1)}
+                  /><Icon name="clock" size={19} /><span>24 horas</span></label
+                >
+                <label class:active={durationDays === 3} class="duration-option"
+                  ><input
+                    type="radio"
+                    name="duration"
+                    value="3"
+                    checked={durationDays === 3}
+                    onchange={() => (durationDays = 3)}
+                  /><Icon name="calendar" size={19} /><span>3 dias</span></label
+                >
+                <label class:active={durationDays === 7} class="duration-option"
+                  ><input
+                    type="radio"
+                    name="duration"
+                    value="7"
+                    checked={durationDays === 7}
+                    onchange={() => (durationDays = 7)}
+                  /><Icon name="calendar" size={19} /><span>7 dias</span></label
+                >
+                <label
+                  class:active={durationDays === 14}
+                  class="duration-option"
+                  ><input
+                    type="radio"
+                    name="duration"
+                    value="14"
+                    checked={durationDays === 14}
+                    onchange={() => (durationDays = 14)}
+                  /><Icon name="calendar" size={19} /><span>14 dias</span
+                  ></label
+                >
+                <label
+                  class:active={durationDays === 'custom'}
+                  class="duration-option"
+                >
+                  <input
+                    type="radio"
+                    name="duration"
+                    value="custom"
+                    checked={durationDays === 'custom'}
+                    onchange={() => (durationDays = 'custom')}
+                  /><Icon name="calendar" size={19} /><span>Personalizado</span>
+                </label>
               </div>
+              {#if durationDays === 'custom'}
+                <div class="custom-end-date">
+                  <label for="poll-end-date" class="dock-label"
+                    >Data e hora de encerramento</label
+                  >
+                  <input
+                    id="poll-end-date"
+                    type="datetime-local"
+                    bind:value={customEndDate}
+                    min={minEndDate}
+                    max={maxEndDate}
+                    required
+                    aria-invalid={Boolean(customEndDate && endDateError)}
+                    aria-describedby="poll-end-date-help"
+                  />
+                  <p id="poll-end-date-help" aria-live="polite">
+                    {customEndDate && endDateError
+                      ? endDateError
+                      : 'Até um mês a partir de agora, no seu horário local.'}
+                  </p>
+                </div>
+              {/if}
             </fieldset>
           {/if}
           {#if turnstileSiteKey && !isEditing}
@@ -674,12 +758,14 @@
             onclick={isEditing ? savePollChoices : createPoll}
             disabled={!canCreate}
           >
-            {#if creating || saving}<span class="button-loader" aria-hidden="true"></span>
-              {isEditing ? 'Salvando…' : 'Criando…'}{:else}{isEditing ? 'Salvar escolhas' : 'Criar votação'} <Icon
-                name="arrow-right"
-                size={25}
-                strokeWidth={2.3}
-              />{/if}
+            {#if creating || saving}<span
+                class="button-loader"
+                aria-hidden="true"
+              ></span>
+              {isEditing ? 'Salvando…' : 'Criando…'}{:else}{isEditing
+                ? 'Salvar escolhas'
+                : 'Criar votação'}
+              <Icon name="arrow-right" size={25} strokeWidth={2.3} />{/if}
           </button>
         </div>
       </div>
@@ -690,8 +776,18 @@
         ><strong>{selectedItems.length}</strong>
         {selectedItems.length === 1 ? 'escolhido' : 'escolhidos'}</span
       >
-      <button type="button" onclick={isEditing ? savePollChoices : createPoll} disabled={!canCreate}>
-        {creating || saving ? (isEditing ? 'Salvando…' : 'Criando…') : isEditing ? 'Salvar escolhas' : 'Criar votação'}
+      <button
+        type="button"
+        onclick={isEditing ? savePollChoices : createPoll}
+        disabled={!canCreate}
+      >
+        {creating || saving
+          ? isEditing
+            ? 'Salvando…'
+            : 'Criando…'
+          : isEditing
+            ? 'Salvar escolhas'
+            : 'Criar votação'}
         <Icon name="arrow-right" size={18} />
       </button>
     </div>
@@ -703,7 +799,8 @@
     {/if}
     {#if saved}
       <p class="notice success" role="status">
-        <Icon name="check" size={18} /> Escolhas atualizadas. A cédula já usa a nova seleção.
+        <Icon name="check" size={18} /> Escolhas atualizadas. A cédula já usa a nova
+        seleção.
       </p>
     {/if}
   {/if}
@@ -1254,6 +1351,37 @@
   .duration-option:has(input:focus-visible) {
     outline: 3px solid var(--signal);
     outline-offset: 3px;
+  }
+
+  .custom-end-date {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .custom-end-date input {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    border: 2px solid transparent;
+    border-radius: 5px;
+    padding: 9px 12px;
+    background: var(--paper-bright);
+    color: var(--ink);
+    font: inherit;
+    color-scheme: light;
+  }
+
+  .custom-end-date input:focus-visible {
+    outline: 3px solid var(--citrus);
+    outline-offset: 3px;
+  }
+
+  .custom-end-date p {
+    margin: 0;
+    color: white;
+    font-size: 0.84rem;
   }
 
   .dock-submit {

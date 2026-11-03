@@ -20,6 +20,7 @@ import { CatalogService } from '../catalog/catalog.service';
 import { PollRepository } from './poll.repository';
 import {
   validatePollCreationInput,
+  validatePollEndDate,
   validatePollOptionPostIds,
   validateVoteOptionIds,
   validateVoterName,
@@ -55,11 +56,12 @@ export class PollService {
 
     const validated = validatePollCreationInput(
       input.title,
-      input.durationHours,
+      input.durationDays,
       input.optionPostIds,
       this.config.maxPollOptions,
+      input.closesAt,
     );
-    const { title, durationHours, optionPostIds } = validated;
+    const { title, durationDays, optionPostIds } = validated;
     const catalog = await this.catalog.getFreshOrStaleCatalog();
     const catalogById = new Map(catalog.items.map((item) => [item.id, item]));
     const selected = optionPostIds.map((id) => catalogById.get(id));
@@ -72,7 +74,7 @@ export class PollService {
 
     const shareToken = createOpaqueToken();
     const editToken = createOpaqueToken();
-    const closesAt = new Date(Date.now() + durationHours * 60 * 60 * 1_000);
+    const closesAt = validatePollEndDate(durationDays, input.closesAt);
     const expiresAt = new Date(closesAt);
     expiresAt.setUTCDate(expiresAt.getUTCDate() + RESULTS_RETENTION_DAYS);
     await this.repository.create({
