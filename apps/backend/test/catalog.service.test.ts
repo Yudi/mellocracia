@@ -9,15 +9,20 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-function createService(ghostMaxPosts = 100): CatalogService {
+function createService(
+  ghostMaxPosts = 100,
+  overrides: Partial<AppConfig> = {},
+): CatalogService {
   const config = {
     ghostContentApiKey: 'content-api-key',
     ghostContentApiUrl: 'https://ghost.example/ghost/api/content',
+    ghostPublicUrl: 'https://ghost.example',
     ghostApiVersion: 'v6.0',
     ghostCacheTtlSeconds: 300,
     ghostFetchTimeoutMs: 1_000,
     ghostFetchAttempts: 2,
     ghostMaxPosts,
+    ...overrides,
   } as AppConfig;
   const redis = {
     get: async () => null,
@@ -29,6 +34,51 @@ function createService(ghostMaxPosts = 100): CatalogService {
 }
 
 describe('CatalogService', () => {
+  test.each(['https://ghost.example', 'http://ghost.example:8080'])(
+    'uses the internal endpoint with canonical headers for %s on every page and retry',
+    async (ghostPublicUrl) => {
+      const requests: { url: URL; headers: Headers }[] = [];
+      globalThis.fetch = (async (input, init) => {
+        const url = new URL(String(input));
+        requests.push({ url, headers: new Headers(init?.headers) });
+        if (requests.length === 1) {
+          return new Response(null, { status: 503 });
+        }
+        const page = Number(url.searchParams.get('page'));
+        return Response.json({
+          posts: [{ id: `post-${page}`, title: `Post ${page}` }],
+          meta: { pagination: { pages: 2, next: page === 1 ? 2 : null } },
+        });
+      }) as typeof globalThis.fetch;
+
+      const catalog = await createService(200, {
+        ghostContentApiUrl: 'http://ghost:2368/ghost/api/content',
+        ghostPublicUrl,
+      }).getCatalog();
+
+      expect(catalog.items).toHaveLength(2);
+      expect(requests).toHaveLength(3);
+      expect(requests.map(({ url }) => url.searchParams.get('page'))).toEqual([
+        '1',
+        '1',
+        '2',
+      ]);
+      const canonical = new URL(ghostPublicUrl);
+      for (const { url, headers } of requests) {
+        expect(url.origin).toBe('http://ghost:2368');
+        expect(url.pathname).toBe('/ghost/api/content/posts/');
+        expect(url.searchParams.get('key')).toBe('content-api-key');
+        expect(headers.get('host')).toBe(canonical.host);
+        expect(headers.get('x-forwarded-host')).toBe(canonical.host);
+        expect(headers.get('x-forwarded-proto')).toBe(
+          canonical.protocol.slice(0, -1),
+        );
+        expect(headers.get('accept')).toBe('application/json');
+        expect(headers.get('accept-version')).toBe('v6.0');
+      }
+    },
+  );
+
   test('increases the request timeout exponentially for each attempt', () => {
     const service = createService() as unknown as {
       ghostFetchTimeoutForAttempt(attempt: number): number;

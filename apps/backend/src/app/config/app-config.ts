@@ -68,6 +68,9 @@ export class AppConfig {
     process.env.GHOST_CONTENT_API_URL ??
       'https://mello.yudi.com.br/ghost/api/content',
   );
+  readonly ghostPublicUrl = withoutTrailingSlash(
+    process.env.GHOST_PUBLIC_URL ?? this.ghostContentApiUrl,
+  );
   readonly ghostContentApiKey = process.env.GHOST_CONTENT_API_KEY ?? '';
   readonly ghostApiVersion = process.env.GHOST_API_VERSION ?? 'v6.0';
   readonly ghostCacheTtlSeconds = parseInteger(

@@ -65,6 +65,8 @@ services:
       PORT: '3000'
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in .env}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      GHOST_CONTENT_API_URL: ${GHOST_CONTENT_API_URL:-http://ghost:2368/ghost/api/content}
+      GHOST_PUBLIC_URL: ${GHOST_PUBLIC_URL:-https://mello.yudi.com.br}
     labels:
       - 'traefik.enable=true'
       - 'traefik.scope=public'

@@ -238,11 +238,15 @@ export class CatalogService {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
+      const publicUrl = new URL(this.config.ghostPublicUrl);
       return await fetch(url, {
         signal: controller.signal,
         headers: {
           accept: 'application/json',
           'accept-version': this.config.ghostApiVersion,
+          host: publicUrl.host,
+          'x-forwarded-host': publicUrl.host,
+          'x-forwarded-proto': publicUrl.protocol.slice(0, -1),
         },
       });
     } finally {
