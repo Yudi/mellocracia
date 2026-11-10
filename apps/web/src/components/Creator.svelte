@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import type {
     CatalogItem,
     CatalogResponse,
@@ -28,6 +28,8 @@
   let durationDays: DurationDays = 3;
   let customEndDate = '';
   let currentTime = new Date();
+  let dockExpanded = false;
+  let dockPanel: HTMLElement;
 
   $: minEndDate = toLocalDateTime(
     new Date(Math.ceil((currentTime.getTime() + 1) / 60_000) * 60_000),
@@ -67,6 +69,8 @@
     (isEditing || durationDays !== 'custom' || !endDateError) &&
     !creating &&
     !saving;
+  $: needsVerification =
+    !isEditing && Boolean(turnstileSiteKey && !turnstileToken);
   $: allVisibleSelected =
     filteredItems.length > 0 &&
     filteredItems.every((item) => selectedIds.includes(item.id));
@@ -161,6 +165,14 @@
     title = (event.currentTarget as HTMLInputElement).value;
   }
 
+  async function toggleDock() {
+    dockExpanded = !dockExpanded;
+    if (dockExpanded) {
+      await tick();
+      dockPanel.focus({ preventScroll: true });
+    }
+  }
+
   async function loadEditablePoll() {
     if (!editToken) return;
     editLoading = true;
@@ -231,6 +243,7 @@
     try {
       await api.updatePollChoices(editToken, { optionPostIds: selectedIds });
       saved = true;
+      dockExpanded = false;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       createError = describeApiError(
@@ -583,220 +596,245 @@
       {/if}
     </section>
 
-    <section class="action-dock" aria-labelledby="dock-title">
-      <div class="dock-selected">
-        <div class="dock-heading-row">
-          <div>
-            <p class="dock-label" id="dock-title">
-              Selecionados <span class="dock-count">{selectedItems.length}</span
-              >
-            </p>
-            {#if selectedItems.length < POLL_LIMITS.minOptions}
-              <p class="dock-hint">
-                Escolha pelo menos {POLL_LIMITS.minOptions} jogos para continuar.
+    <div class="dock-shell" class:dock-expanded={dockExpanded}>
+      <section
+        class="action-dock"
+        id="poll-settings"
+        tabindex="-1"
+        aria-labelledby="dock-title"
+        bind:this={dockPanel}
+      >
+        <div class="dock-selected">
+          <div class="dock-heading-row">
+            <div>
+              <p class="dock-label" id="dock-title">
+                Selecionados <span class="dock-count">{selectedItems.length}</span
+                >
               </p>
+              {#if selectedItems.length < POLL_LIMITS.minOptions}
+                <p class="dock-hint">
+                  Escolha pelo menos {POLL_LIMITS.minOptions} jogos.
+                </p>
+              {/if}
+            </div>
+            {#if selectedItems.length > 0}<button
+                class="dock-clear"
+                type="button"
+                onclick={clearSelection}>Limpar seleção</button
+              >{/if}
+          </div>
+          {#if selectedItems.length > 0}
+            <div class="selected-slips" role="group" aria-label="Jogos escolhidos">
+              {#each selectedItems as item (item.id)}
+                <button
+                  class="selected-slip"
+                  type="button"
+                  onclick={() => removeItem(item.id)}
+                  aria-label={`Remover ${item.title}`}
+                >
+                  {#if item.featureImage}<img
+                      src={item.featureImage}
+                      alt=""
+                      loading="lazy"
+                      referrerpolicy="no-referrer"
+                    />{:else}<span class="slip-fallback" aria-hidden="true"
+                      >{item.title.slice(0, 1)}</span
+                    >{/if}
+                  <span class="slip-title">{item.title}</span><span
+                    class="slip-remove"
+                    aria-hidden="true"><Icon name="x" size={13} /></span
+                  >
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+
+        <div class="dock-form">
+          <div class="dock-form-fields">
+            {#if isEditing}
+              <div class="edit-summary">
+                <span class="dock-label">Editando a votação</span>
+                <strong>{title}</strong>
+                <span>Votação encerra em {formatDate(closesAt)}</span>
+              </div>
             {:else}
-              <p class="dock-hint">Você pode escolher quantos jogos quiser.</p>
+              <label>
+                <span class="dock-title-label">
+                  <span class="dock-label">Título da votação</span>
+                  <span class="dock-input-meta" aria-hidden="true"
+                    >{title.length}/{POLL_LIMITS.maxTitleLength}</span
+                  >
+                </span>
+                <input
+                  class="dock-title-input"
+                  type="text"
+                  value={title}
+                  oninput={updateTitle}
+                  maxlength={POLL_LIMITS.maxTitleLength}
+                  placeholder="O que vamos jogar no sábado?"
+                />
+              </label>
+              <label class="name-requirement">
+                <input type="checkbox" bind:checked={requireVoterName} />
+                <span>Exigir nome para votar</span>
+              </label>
+              <fieldset class="duration-fieldset">
+                <legend class="dock-label">Encerrar votação em</legend>
+                <div class="duration-options">
+                  <label class:active={durationDays === 1} class="duration-option"
+                    ><input
+                      type="radio"
+                      name="duration"
+                      value="1"
+                      checked={durationDays === 1}
+                      onchange={() => (durationDays = 1)}
+                    /><span>24 horas</span></label
+                  >
+                  <label class:active={durationDays === 3} class="duration-option"
+                    ><input
+                      type="radio"
+                      name="duration"
+                      value="3"
+                      checked={durationDays === 3}
+                      onchange={() => (durationDays = 3)}
+                    /><span>3 dias</span></label
+                  >
+                  <label class:active={durationDays === 7} class="duration-option"
+                    ><input
+                      type="radio"
+                      name="duration"
+                      value="7"
+                      checked={durationDays === 7}
+                      onchange={() => (durationDays = 7)}
+                    /><span>7 dias</span></label
+                  >
+                  <label
+                    class:active={durationDays === 14}
+                    class="duration-option"
+                    ><input
+                      type="radio"
+                      name="duration"
+                      value="14"
+                      checked={durationDays === 14}
+                      onchange={() => (durationDays = 14)}
+                    /><span>14 dias</span
+                    ></label
+                  >
+                  <label
+                    class:active={durationDays === 'custom'}
+                    class="duration-option"
+                  >
+                    <input
+                      type="radio"
+                      name="duration"
+                      value="custom"
+                      checked={durationDays === 'custom'}
+                      onchange={() => (durationDays = 'custom')}
+                    /><span>Personalizado</span>
+                  </label>
+                </div>
+                {#if durationDays === 'custom'}
+                  <div class="custom-end-date">
+                    <label for="poll-end-date" class="dock-label"
+                      >Data e hora de encerramento</label
+                    >
+                    <input
+                      id="poll-end-date"
+                      type="datetime-local"
+                      bind:value={customEndDate}
+                      min={minEndDate}
+                      max={maxEndDate}
+                      required
+                      aria-invalid={Boolean(customEndDate && endDateError)}
+                      aria-describedby="poll-end-date-help"
+                    />
+                    <p id="poll-end-date-help" aria-live="polite">
+                      {customEndDate && endDateError
+                        ? endDateError
+                        : 'Até um mês a partir de agora, no seu horário local.'}
+                    </p>
+                  </div>
+                {/if}
+              </fieldset>
             {/if}
           </div>
-          {#if selectedItems.length > 0}<button
-              class="dock-clear"
-              type="button"
-              onclick={clearSelection}>Limpar seleção</button
-            >{/if}
-        </div>
-        {#if selectedItems.length > 0}
-          <div class="selected-slips" aria-label="Jogos escolhidos">
-            {#each selectedItems as item (item.id)}
-              <button
-                class="selected-slip"
-                type="button"
-                onclick={() => removeItem(item.id)}
-                aria-label={`Remover ${item.title}`}
-              >
-                {#if item.featureImage}<img
-                    src={item.featureImage}
-                    alt=""
-                    loading="lazy"
-                    referrerpolicy="no-referrer"
-                  />{:else}<span class="slip-fallback" aria-hidden="true"
-                    >{item.title.slice(0, 1)}</span
-                  >{/if}
-                <span>{item.title}</span><span
-                  class="slip-remove"
-                  aria-hidden="true"><Icon name="x" size={13} /></span
-                >
-              </button>
-            {/each}
-          </div>
-        {:else}
-          <p class="dock-empty">
-            A cédula está em branco. Clique nos placares acima para adicionar
-            opções.
-          </p>
-        {/if}
-      </div>
-
-      <div class="dock-form">
-        <div class="dock-form-fields">
-          {#if isEditing}
-            <div class="edit-summary">
-              <span class="dock-label">Editando a votação</span>
-              <strong>{title}</strong>
-              <span>Votação encerra em {formatDate(closesAt)}</span>
-            </div>
-          {:else}
-            <label>
-              <span class="dock-label">Título da votação</span>
-              <input
-                class="dock-title-input"
-                type="text"
-                value={title}
-                oninput={updateTitle}
-                maxlength={POLL_LIMITS.maxTitleLength}
-                placeholder="O que vamos jogar no sábado?"
+          <div class="dock-submit">
+            {#if turnstileSiteKey && !isEditing}
+              <TurnstileWidget
+                siteKey={turnstileSiteKey}
+                onToken={(token) => (turnstileToken = token)}
+                resetKey={turnstileResetKey}
               />
-              <span class="dock-input-meta"
-                >{title.length}/{POLL_LIMITS.maxTitleLength}</span
-              >
-            </label>
-            <label class="name-requirement">
-              <input type="checkbox" bind:checked={requireVoterName} />
-              <span>Exigir nome para votar</span>
-            </label>
-            <fieldset class="duration-fieldset">
-              <legend class="dock-label">Encerrar votação em</legend>
-              <div class="duration-options">
-                <label class:active={durationDays === 1} class="duration-option"
-                  ><input
-                    type="radio"
-                    name="duration"
-                    value="1"
-                    checked={durationDays === 1}
-                    onchange={() => (durationDays = 1)}
-                  /><Icon name="clock" size={19} /><span>24 horas</span></label
-                >
-                <label class:active={durationDays === 3} class="duration-option"
-                  ><input
-                    type="radio"
-                    name="duration"
-                    value="3"
-                    checked={durationDays === 3}
-                    onchange={() => (durationDays = 3)}
-                  /><Icon name="calendar" size={19} /><span>3 dias</span></label
-                >
-                <label class:active={durationDays === 7} class="duration-option"
-                  ><input
-                    type="radio"
-                    name="duration"
-                    value="7"
-                    checked={durationDays === 7}
-                    onchange={() => (durationDays = 7)}
-                  /><Icon name="calendar" size={19} /><span>7 dias</span></label
-                >
-                <label
-                  class:active={durationDays === 14}
-                  class="duration-option"
-                  ><input
-                    type="radio"
-                    name="duration"
-                    value="14"
-                    checked={durationDays === 14}
-                    onchange={() => (durationDays = 14)}
-                  /><Icon name="calendar" size={19} /><span>14 dias</span
-                  ></label
-                >
-                <label
-                  class:active={durationDays === 'custom'}
-                  class="duration-option"
-                >
-                  <input
-                    type="radio"
-                    name="duration"
-                    value="custom"
-                    checked={durationDays === 'custom'}
-                    onchange={() => (durationDays = 'custom')}
-                  /><Icon name="calendar" size={19} /><span>Personalizado</span>
-                </label>
-              </div>
-              {#if durationDays === 'custom'}
-                <div class="custom-end-date">
-                  <label for="poll-end-date" class="dock-label"
-                    >Data e hora de encerramento</label
-                  >
-                  <input
-                    id="poll-end-date"
-                    type="datetime-local"
-                    bind:value={customEndDate}
-                    min={minEndDate}
-                    max={maxEndDate}
-                    required
-                    aria-invalid={Boolean(customEndDate && endDateError)}
-                    aria-describedby="poll-end-date-help"
-                  />
-                  <p id="poll-end-date-help" aria-live="polite">
-                    {customEndDate && endDateError
-                      ? endDateError
-                      : 'Até um mês a partir de agora, no seu horário local.'}
-                  </p>
-                </div>
-              {/if}
-            </fieldset>
-          {/if}
-          {#if turnstileSiteKey && !isEditing}
-            <TurnstileWidget
-              siteKey={turnstileSiteKey}
-              onToken={(token) => (turnstileToken = token)}
-              resetKey={turnstileResetKey}
-            />
+            {/if}
+            <button
+              class="create-button"
+              type="button"
+              onclick={isEditing ? savePollChoices : createPoll}
+              disabled={!canCreate}
+            >
+              {#if creating || saving}<span
+                  class="button-loader"
+                  aria-hidden="true"
+                ></span>
+                {isEditing ? 'Salvando…' : 'Criando…'}{:else}{isEditing
+                  ? 'Salvar escolhas'
+                  : 'Criar votação'}
+                <Icon name="arrow-right" size={25} strokeWidth={2.3} />{/if}
+            </button>
+          </div>
+          {#if createError}
+            <p class="notice error create-error" role="alert">
+              <Icon name="x" size={18} /> <span>{createError}</span>
+            </p>
           {/if}
         </div>
-        <div class="dock-submit">
+      </section>
+
+      <div class="compact-action-strip">
+        <span aria-live="polite"
+          ><strong>{selectedItems.length}</strong>
+          {selectedItems.length === 1 ? 'escolhido' : 'escolhidos'}</span
+        >
+        <button
+          class="mobile-dock-toggle"
+          type="button"
+          aria-expanded={dockExpanded}
+          aria-controls="poll-settings"
+          onclick={toggleDock}
+        >
+          {dockExpanded
+            ? 'Recolher painel'
+            : isEditing
+              ? 'Revisar escolhas'
+              : 'Configurar votação'}
+          <Icon name={dockExpanded ? 'x' : 'arrow-right'} size={18} />
+        </button>
+        {#if (canCreate && !needsVerification) || creating || saving}
           <button
-            class="create-button"
+            class="compact-submit"
             type="button"
             onclick={isEditing ? savePollChoices : createPoll}
             disabled={!canCreate}
           >
-            {#if creating || saving}<span
-                class="button-loader"
-                aria-hidden="true"
-              ></span>
-              {isEditing ? 'Salvando…' : 'Criando…'}{:else}{isEditing
+            {creating || saving
+              ? isEditing
+                ? 'Salvando…'
+                : 'Criando…'
+              : isEditing
                 ? 'Salvar escolhas'
                 : 'Criar votação'}
-              <Icon name="arrow-right" size={25} strokeWidth={2.3} />{/if}
+            <Icon name="arrow-right" size={18} />
           </button>
-        </div>
+        {:else}
+          <a class="compact-submit" href="#poll-settings">
+            {isEditing ? 'Revisar escolhas' : 'Configurar votação'}
+            <Icon name="arrow-right" size={18} />
+          </a>
+        {/if}
       </div>
-    </section>
-
-    <div class="mobile-action-strip" aria-live="polite">
-      <span
-        ><strong>{selectedItems.length}</strong>
-        {selectedItems.length === 1 ? 'escolhido' : 'escolhidos'}</span
-      >
-      <button
-        type="button"
-        onclick={isEditing ? savePollChoices : createPoll}
-        disabled={!canCreate}
-      >
-        {creating || saving
-          ? isEditing
-            ? 'Salvando…'
-            : 'Criando…'
-          : isEditing
-            ? 'Salvar escolhas'
-            : 'Criar votação'}
-        <Icon name="arrow-right" size={18} />
-      </button>
     </div>
 
-    {#if createError}
-      <p class="notice error create-error" role="alert">
-        <Icon name="x" size={18} /> <span>{createError}</span>
-      </p>
-    {/if}
     {#if saved}
       <p class="notice success" role="status">
         <Icon name="check" size={18} /> Escolhas atualizadas. A cédula já usa a nova
@@ -1138,20 +1176,21 @@
     margin-top: 14px;
   }
 
+  .dock-shell {
+    display: contents;
+  }
+
   .action-dock {
     display: grid;
-    grid-template-columns: minmax(260px, 1fr) minmax(520px, 1.45fr);
-    gap: 28px;
+    grid-template-columns: minmax(200px, 0.55fr) minmax(0, 1.45fr);
+    gap: 18px;
     margin: 4px -30px 0;
     border-top: 2px solid var(--citrus);
     border-bottom: 2px solid var(--citrus);
-    padding: 23px 30px 25px;
+    padding: 14px 30px;
     background: var(--cobalt);
     color: white;
     box-shadow: var(--shadow-paper);
-    position: sticky;
-    bottom: 0;
-    z-index: 4;
     clip-path: polygon(
       10px 0,
       calc(100% - 10px) 0,
@@ -1166,6 +1205,7 @@
 
   .dock-heading-row {
     display: flex;
+    align-items: center;
     justify-content: space-between;
     gap: 12px;
   }
@@ -1183,36 +1223,45 @@
     color: var(--citrus);
   }
 
-  .dock-hint,
-  .dock-empty {
-    margin: 6px 0 0;
+  .dock-hint {
+    margin: 4px 0 0;
     color: rgb(255 255 255 / 0.8);
     font-size: 0.79rem;
     line-height: 1.35;
   }
 
   .dock-clear {
-    align-self: start;
+    flex-shrink: 0;
+    min-height: 44px;
     border: 0;
-    border-bottom: 1px solid currentColor;
-    padding: 0 0 2px;
+    padding: 0;
     background: transparent;
     color: white;
     font-size: 0.76rem;
     font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 
   .selected-slips {
+    --slip-row-height: 54px;
+    --slip-gap: 8px;
+
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr));
-    gap: 9px;
-    margin-top: 18px;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 120px), 1fr));
+    grid-auto-rows: var(--slip-row-height);
+    gap: var(--slip-gap);
+    max-block-size: calc(2 * var(--slip-row-height) + var(--slip-gap));
+    overflow: hidden auto;
+    scrollbar-color: var(--paper-dim) transparent;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
   }
 
   .selected-slip {
     position: relative;
     display: grid;
-    grid-template-columns: 32px 1fr;
+    grid-template-columns: 32px minmax(0, 1fr);
     align-items: center;
     width: 100%;
     min-height: 52px;
@@ -1245,7 +1294,7 @@
     font-size: 1.35rem;
   }
 
-  .selected-slip > span:not(.slip-remove) {
+  .slip-title {
     display: -webkit-box;
     max-height: 31px;
     padding-left: 7px;
@@ -1272,18 +1321,20 @@
 
   .dock-form {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(170px, 0.58fr);
+    grid-template-columns: minmax(0, 1fr) 300px;
     align-items: end;
-    gap: 20px;
+    gap: 18px;
   }
 
   .dock-form-fields {
+    display: grid;
+    gap: 8px;
     min-width: 0;
   }
 
   .dock-form .dock-label {
     display: block;
-    margin-bottom: 7px;
+    margin-bottom: 4px;
     color: white;
     font-size: 1rem;
   }
@@ -1303,15 +1354,20 @@
   }
 
   .dock-input-meta {
-    display: block;
-    margin-top: 3px;
-    color: rgb(255 255 255 / 0.7);
+    color: rgb(255 255 255 / 0.85);
     font-size: 0.72rem;
-    text-align: right;
+  }
+
+  .dock-title-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
   }
 
   .duration-fieldset {
-    margin: 15px 0 0;
+    min-width: 0;
+    margin: 0;
     border: 0;
     padding: 0;
   }
@@ -1319,17 +1375,16 @@
   .duration-options {
     display: flex;
     flex-wrap: wrap;
-    gap: 7px;
+    gap: 6px;
   }
 
   .duration-option {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    min-height: 38px;
+    min-height: 44px;
     border: 2px solid transparent;
     border-radius: 4px;
-    padding: 7px 10px;
+    padding: 7px 6px;
     background: var(--paper-bright);
     color: var(--ink);
     font-size: 0.84rem;
@@ -1385,7 +1440,18 @@
   }
 
   .dock-submit {
-    align-self: end;
+    display: grid;
+    gap: 8px;
+    justify-items: center;
+  }
+
+  .dock-submit :global(.turnstile) {
+    margin: 0;
+  }
+
+  .selected-slip:focus-visible,
+  .create-button:focus-visible {
+    outline-offset: -5px;
   }
 
   .create-button {
@@ -1394,7 +1460,7 @@
     justify-content: center;
     gap: 13px;
     width: 100%;
-    min-height: 68px;
+    min-height: 52px;
     border: 2px solid var(--ink);
     border-radius: 0;
     padding: 12px 15px;
@@ -1456,12 +1522,13 @@
     }
   }
 
-  .mobile-action-strip {
+  .compact-action-strip {
     display: none;
   }
 
   .create-error {
-    margin-top: 16px;
+    grid-column: 1 / -1;
+    margin: 0;
   }
 
   .success-panel {
@@ -1549,18 +1616,94 @@
     .cover-wall {
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
+  }
 
+  @media (min-width: 1001px) and (min-height: 701px) {
     .action-dock {
-      grid-template-columns: minmax(220px, 0.85fr) minmax(470px, 1.15fr);
+      position: sticky;
+      bottom: 0;
+      z-index: 4;
+    }
+  }
+
+  @media (max-width: 1000px) {
+    .action-dock {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @media (max-width: 1000px), (max-height: 700px) {
+    :global(html):has(.compact-action-strip) {
+      scroll-padding-bottom: calc(84px + env(safe-area-inset-bottom));
     }
 
-    .dock-form {
-      grid-template-columns: 1fr;
+    .compact-action-strip {
+      position: sticky;
+      z-index: 8;
+      bottom: calc(10px + env(safe-area-inset-bottom));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       gap: 10px;
+      max-width: 480px;
+      margin: 8px auto 0;
+      border: 2px solid var(--ink);
+      padding: 6px 6px 6px 12px;
+      background: var(--cobalt);
+      color: white;
+      box-shadow: 0 12px 28px rgb(8 55 182 / 0.28);
+      clip-path: polygon(
+        8px 0,
+        calc(100% - 8px) 0,
+        100% 8px,
+        100% calc(100% - 8px),
+        calc(100% - 8px) 100%,
+        8px 100%,
+        0 calc(100% - 8px),
+        0 8px
+      );
     }
 
-    .dock-submit {
-      display: block;
+    .compact-action-strip strong {
+      color: var(--citrus);
+      font-family: var(--font-display);
+      font-size: 1.35rem;
+    }
+
+    .compact-action-strip :is(button, a) {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 44px;
+      border: 2px solid var(--ink);
+      padding: 8px 12px;
+      background: var(--citrus);
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 900;
+      text-decoration: none;
+      clip-path: polygon(
+        6px 0,
+        100% 0,
+        100% calc(100% - 6px),
+        calc(100% - 6px) 100%,
+        0 100%,
+        0 6px
+      );
+    }
+
+    .compact-action-strip :is(button, a):focus-visible {
+      outline-offset: -5px;
+    }
+
+    .compact-action-strip button:disabled {
+      background: var(--paper-dim);
+      color: var(--ink-soft);
+    }
+
+    .compact-action-strip .mobile-dock-toggle {
+      display: none;
     }
   }
 
@@ -1596,7 +1739,6 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
       padding-top: 14px;
-      padding-bottom: 94px;
     }
 
     .cover-placard {
@@ -1617,81 +1759,17 @@
     }
 
     .action-dock {
-      display: block;
       margin: 16px -18px 0;
-      padding: 19px 18px 20px;
-      position: relative;
-    }
-
-    .mobile-action-strip {
-      position: fixed;
-      z-index: 8;
-      right: 10px;
-      bottom: 10px;
-      left: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      min-height: 58px;
-      border: 2px solid var(--ink);
-      padding: 7px 7px 7px 14px;
-      background: var(--cobalt);
-      color: white;
-      box-shadow: 0 12px 28px rgb(8 55 182 / 0.28);
-      clip-path: polygon(
-        8px 0,
-        calc(100% - 8px) 0,
-        100% 8px,
-        100% calc(100% - 8px),
-        calc(100% - 8px) 100%,
-        8px 100%,
-        0 calc(100% - 8px),
-        0 8px
-      );
-    }
-
-    .mobile-action-strip strong {
-      color: var(--citrus);
-      font-family: var(--font-display);
-      font-size: 1.35rem;
-    }
-
-    .mobile-action-strip button {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      min-height: 42px;
-      border: 2px solid var(--ink);
-      padding: 8px 12px;
-      background: var(--citrus);
-      color: var(--ink);
-      font-family: var(--font-display);
-      font-size: 1rem;
-      font-weight: 900;
-      clip-path: polygon(
-        6px 0,
-        100% 0,
-        100% calc(100% - 6px),
-        calc(100% - 6px) 100%,
-        0 100%,
-        0 6px
-      );
-    }
-
-    .mobile-action-strip button:disabled {
-      background: var(--paper-dim);
-      color: var(--ink-soft);
+      padding-inline: 18px;
     }
 
     .dock-form {
-      display: block;
-      margin-top: 22px;
+      grid-template-columns: minmax(0, 1fr);
     }
 
-    .dock-submit {
-      display: block;
-      margin-top: 14px;
+    .compact-action-strip {
+      max-width: none;
+      margin-inline: -8px;
     }
 
     .success-heading {
@@ -1720,6 +1798,63 @@
     }
   }
 
+  @media (max-width: 767px),
+    (max-width: 1000px) and (max-height: 500px) and (pointer: coarse) {
+    .dock-shell {
+      --dock-bottom: calc(10px + env(safe-area-inset-bottom));
+
+      position: fixed;
+      inset-inline: 0;
+      bottom: var(--dock-bottom);
+      z-index: 8;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-block-size: calc(
+        100dvh - var(--dock-bottom) - max(16px, env(safe-area-inset-top))
+      );
+    }
+
+    .dock-shell:not(.dock-expanded) .action-dock {
+      display: none;
+    }
+
+    .dock-shell .action-dock {
+      margin: 0;
+      min-block-size: 0;
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+    }
+
+    .selected-slips {
+      grid-template-columns: none;
+      grid-auto-flow: column;
+      grid-auto-columns: 128px;
+      max-block-size: none;
+      overflow: auto hidden;
+      scrollbar-gutter: auto;
+    }
+
+    .dock-shell .compact-action-strip {
+      position: static;
+      flex-shrink: 0;
+      max-width: none;
+      margin: 0 10px;
+    }
+
+    .compact-action-strip .mobile-dock-toggle {
+      display: inline-flex;
+    }
+
+    .compact-action-strip .compact-submit {
+      display: none;
+    }
+
+    :global(body):has(.dock-shell) :global(.site-footer) {
+      padding-bottom: calc(96px + env(safe-area-inset-bottom));
+    }
+  }
+
   @media (max-width: 430px) {
     .cover-wall {
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1738,6 +1873,12 @@
       flex: 1;
       padding-inline: 8px;
       font-size: 0.84rem;
+    }
+  }
+
+  @media (max-width: 335px) {
+    .dock-submit {
+      margin-inline: -8px;
     }
   }
 </style>
